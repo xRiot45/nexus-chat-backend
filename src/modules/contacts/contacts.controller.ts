@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
@@ -7,6 +7,7 @@ import type { AuthenticatedRequest } from 'src/shared/interfaces/authenticated-r
 import { ContactsService } from './contacts.service';
 import { ContactResponseDto } from './dto/contact.dto';
 import { CreateContactDto } from './dto/create-contact.dto';
+import { UpdateContactDto } from './dto/update-contact.dto';
 
 @ApiTags('Contacts')
 // @UseGuards(ThrottlerGuard)
@@ -83,6 +84,33 @@ export class ContactsController {
             statusCode: HttpStatus.OK,
             timestamp: new Date(),
             message: 'Contact fetched by ID successfully',
+            data,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Update contact by id',
+        description: 'Contact updated by ID successfully',
+        status: HttpStatus.OK,
+        response: ContactResponseDto,
+        auth: true,
+    })
+    // @Throttle({ default: { limit: 5, ttl: 60 } })
+    @Put(':id')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async update(
+        @Param('id') id: string,
+        @Body() updateContactDto: UpdateContactDto,
+        @Req() req: AuthenticatedRequest,
+    ): Promise<BaseResponseDto<ContactResponseDto>> {
+        const userId = req?.user?.sub;
+        const data = await this.contactsService.update(id, updateContactDto, userId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Contact updated successfully',
             data,
         };
     }

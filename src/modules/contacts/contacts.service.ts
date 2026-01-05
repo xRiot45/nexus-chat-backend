@@ -1,10 +1,17 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    Injectable,
+    InternalServerErrorException,
+    NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { Repository } from 'typeorm';
 import { ContactResponseDto } from './dto/contact.dto';
 import { CreateContactDto } from './dto/create-contact.dto';
+import { UpdateContactDto } from './dto/update-contact.dto';
 import { ContactEntity } from './entities/contact.entity';
 
 @Injectable()
@@ -126,6 +133,37 @@ export class ContactsService {
         } catch (error) {
             this.logger.error(`Failed to fetch contact: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Failed to fetch contact');
+        }
+    }
+
+    async update(id: string, updateContactDto: UpdateContactDto, userId: string): Promise<ContactResponseDto> {
+        const context = `${ContactsService.name}.update`;
+        this.logger.log(`Updating contact ${id} for user ${userId}`, context);
+
+        try {
+            const contact = await this.contactRepository.findOne({
+                where: { id: id, userId: userId },
+                relations: { contactUser: true },
+            });
+
+            if (!contact) {
+                this.logger.warn(`Contact ${id} not found for user ${userId}`, context);
+                throw new NotFoundException('Contact not found');
+            }
+
+            const updatedContact = this.contactRepository.merge(contact, updateContactDto);
+            const savedContact = await this.contactRepository.save(updatedContact);
+
+            return plainToInstance(ContactResponseDto, savedContact, {
+                excludeExtraneousValues: true,
+            });
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException) {
+                throw error;
+            }
+
+            this.logger.error(`Failed to update contact: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to update contact');
         }
     }
 }
