@@ -1,11 +1,10 @@
 import { UserStatus } from 'src/common/enums/user-status.enum';
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { ContactEntity } from 'src/modules/contacts/entities/contact.entity';
+import { BaseEntity } from 'src/shared/entity/base.entity';
+import { Column, Entity, OneToMany } from 'typeorm';
 
 @Entity('users')
-export class UserEntity {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
-
+export class UserEntity extends BaseEntity {
     @Column({ unique: true, length: 50 })
     username: string;
 
@@ -52,20 +51,11 @@ export class UserEntity {
     @Column({ name: 'lastSeenAt', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
     lastSeenAt: Date;
 
-    @CreateDateColumn({ name: 'createdAt' })
-    createdAt: Date;
-
-    @UpdateDateColumn({ name: 'updatedAt' })
-    updatedAt: Date;
-
     // --- Relations ---
 
-    // @OneToMany(() => ConversationMember, member => member.user)
-    // memberships: ConversationMember[];
+    @OneToMany(() => ContactEntity, contact => contact.user)
+    contacts: ContactEntity[];
 
-    // @OneToMany(() => Message, message => message.sender)
-    // messages: Message[];
-
-    // @OneToMany(() => Story, story => story.user)
-    // stories: Story[];
+    @OneToMany(() => ContactEntity, contact => contact.contactUser)
+    addedBy: ContactEntity[];
 }
