@@ -131,6 +131,10 @@ export class ContactsService {
                 excludeExtraneousValues: true,
             });
         } catch (error) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+
             this.logger.error(`Failed to fetch contact: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Failed to fetch contact');
         }
