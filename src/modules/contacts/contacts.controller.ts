@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
@@ -22,8 +22,8 @@ export class ContactsController {
         auth: true,
     })
     // @Throttle({ default: { limit: 5, ttl: 60 } })
-    @UseGuards(JwtAuthGuard)
     @Post()
+    @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.CREATED)
     async create(
         @Body() createContactDto: CreateContactDto,
@@ -36,6 +36,28 @@ export class ContactsController {
             statusCode: HttpStatus.CREATED,
             timestamp: new Date(),
             message: 'Contact created successfully',
+            data,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get all contacts',
+        description: 'Contacts fetched successfully',
+        status: HttpStatus.OK,
+        response: ContactResponseDto,
+        auth: true,
+    })
+    @Get()
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async findAll(@Req() req: AuthenticatedRequest): Promise<BaseResponseDto<ContactResponseDto[]>> {
+        const userId = req?.user?.sub;
+        const data = await this.contactsService.findAll(userId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Contacts fetched successfully',
             data,
         };
     }

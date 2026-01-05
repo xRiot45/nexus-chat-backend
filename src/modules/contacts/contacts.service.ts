@@ -67,4 +67,31 @@ export class ContactsService {
             throw new InternalServerErrorException('Failed to create contact');
         }
     }
+
+    /**
+     * Retrieves all contacts associated with the given user ID.
+     * @param userId The ID of the user to fetch contacts for.
+     * @returns A promise of an array of ContactResponseDto containing the user's contacts.
+     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the user's contacts.
+     */
+    async findAll(userId: string): Promise<ContactResponseDto[]> {
+        const context = `${ContactsService.name}.findAll`;
+        this.logger.log(`Fetching all contacts for user ${userId}`, context);
+
+        try {
+            const contacts = await this.contactRepository.find({
+                where: { userId: userId },
+                relations: {
+                    contactUser: true,
+                },
+            });
+
+            return plainToInstance(ContactResponseDto, contacts, {
+                excludeExtraneousValues: true,
+            });
+        } catch (error) {
+            this.logger.error(`Failed to fetch contacts: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to fetch contacts');
+        }
+    }
 }
