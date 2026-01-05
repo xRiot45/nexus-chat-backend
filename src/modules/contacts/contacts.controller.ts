@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
@@ -112,6 +112,27 @@ export class ContactsController {
             timestamp: new Date(),
             message: 'Contact updated successfully',
             data,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Delete contact by id',
+        description: 'Contact deleted by ID successfully',
+        status: HttpStatus.OK,
+        auth: true,
+    })
+    // @Throttle({ default: { limit: 5, ttl: 60 } })
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    @Delete(':id')
+    async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest): Promise<BaseResponseDto> {
+        const userId = req?.user?.sub;
+        await this.contactsService.remove(id, userId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Contact deleted successfully',
         };
     }
 }

@@ -176,4 +176,37 @@ export class ContactsService {
             throw new InternalServerErrorException('Failed to update contact');
         }
     }
+
+    /**
+     * Deletes a contact associated with the given user ID and contact ID.
+     * @param id The ID of the contact to be deleted.
+     * @param userId The ID of the user to delete the contact for.
+     * @returns A promise that resolves when the contact is successfully deleted.
+     * @throws InternalServerErrorException If an unexpected error occurs during the deletion of the contact.
+     */
+    async remove(id: string, userId: string): Promise<void> {
+        const context = `${ContactsService.name}.delete`;
+        this.logger.log(`Deleting contact ${id} for user ${userId}`, context);
+        try {
+            const deleteContact = await this.contactRepository.delete({
+                id,
+                userId,
+            });
+
+            if (deleteContact.affected === 0) {
+                this.logger.warn(`Contact ${id} not found for user ${userId}`, context);
+                throw new NotFoundException('Contact not found');
+            }
+
+            this.logger.log(`Contact ${id} deleted for user ${userId}`, context);
+            return;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            this.logger.error(`Failed to delete contact: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to delete contact');
+        }
+    }
 }
