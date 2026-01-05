@@ -94,4 +94,30 @@ export class ContactsService {
             throw new InternalServerErrorException('Failed to fetch contacts');
         }
     }
+
+    async findById(id: string, userId: string): Promise<ContactResponseDto> {
+        const context = `${ContactsService.name}.findById`;
+        this.logger.log(`Fetching contact ${id} for user ${userId}`, context);
+
+        try {
+            const contact = await this.contactRepository.findOne({
+                where: { id: id, userId: userId },
+                relations: {
+                    contactUser: true,
+                },
+            });
+
+            if (!contact) {
+                this.logger.warn(`Contact ${id} not found for user ${userId}`, context);
+                throw new BadRequestException('Contact not found');
+            }
+
+            return plainToInstance(ContactResponseDto, contact, {
+                excludeExtraneousValues: true,
+            });
+        } catch (error) {
+            this.logger.error(`Failed to fetch contact: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to fetch contact');
+        }
+    }
 }

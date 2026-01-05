@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
@@ -58,6 +58,31 @@ export class ContactsController {
             statusCode: HttpStatus.OK,
             timestamp: new Date(),
             message: 'Contacts fetched successfully',
+            data,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get contact by id',
+        description: 'Contact fetched by ID successfully',
+        status: HttpStatus.OK,
+        response: ContactResponseDto,
+        auth: true,
+    })
+    @Get(':id')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async findById(
+        @Param('id') id: string,
+        @Req() req: AuthenticatedRequest,
+    ): Promise<BaseResponseDto<ContactResponseDto>> {
+        const userId = req?.user?.sub;
+        const data = await this.contactsService.findById(id, userId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Contact fetched by ID successfully',
             data,
         };
     }
