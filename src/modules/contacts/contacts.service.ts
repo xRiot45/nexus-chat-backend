@@ -136,6 +136,16 @@ export class ContactsService {
         }
     }
 
+    /**
+     * Updates a contact associated with the given user ID and contact ID.
+     * @param id The ID of the contact to be updated.
+     * @param updateContactDto The request data transfer object containing the updated contact information.
+     * @param userId The ID of the user to update the contact for.
+     * @returns A promise of the ContactResponseDto containing the updated contact.
+     * @throws NotFoundException If the contact is not found.
+     * @throws BadRequestException If the contact is not found.
+     * @throws InternalServerErrorException If an unexpected error occurs during the update of the contact.
+     */
     async update(id: string, updateContactDto: UpdateContactDto, userId: string): Promise<ContactResponseDto> {
         const context = `${ContactsService.name}.update`;
         this.logger.log(`Updating contact ${id} for user ${userId}`, context);
