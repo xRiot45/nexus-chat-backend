@@ -95,6 +95,14 @@ export class ContactsService {
         }
     }
 
+    /**
+     * Retrieves a contact associated with the given user ID and contact ID.
+     * @param id The ID of the contact to be fetched.
+     * @param userId The ID of the user to fetch the contact for.
+     * @returns A promise of the ContactResponseDto containing the contact.
+     * @throws BadRequestException If the contact is not found.
+     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the contact.
+     */
     async findById(id: string, userId: string): Promise<ContactResponseDto> {
         const context = `${ContactsService.name}.findById`;
         this.logger.log(`Fetching contact ${id} for user ${userId}`, context);
