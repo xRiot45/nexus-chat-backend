@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { AuthSocket } from 'src/modules/chat/chat.gateway';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
 import { Repository } from 'typeorm';
 
@@ -21,20 +22,32 @@ export class TokenService {
     ) {}
 
     async generateTokens(userId: string, email: string): Promise<Tokens> {
-        const payload = { sub: userId, email: email };
+        const basePayload = { sub: userId, email: email };
 
         const accessTokenExp = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '3600';
         const refreshTokenExp = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '604800';
 
+        const accessTokenSecret = this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET');
+        const refreshTokenSecret = this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET');
+
         const [at, rt] = await Promise.all([
-            this.jwtService.signAsync(payload, {
-                secret: this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET'),
-                expiresIn: parseInt(accessTokenExp, 10),
-            }),
-            this.jwtService.signAsync(payload, {
-                secret: this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET'),
-                expiresIn: parseInt(refreshTokenExp, 10),
-            }),
+            // TODO : Generate Access Token
+            this.jwtService.signAsync(
+                { ...basePayload, type: 'access' },
+                {
+                    secret: accessTokenSecret,
+                    expiresIn: parseInt(accessTokenExp, 10),
+                },
+            ),
+
+            // TODO : Generate Refresh Token
+            this.jwtService.signAsync(
+                { ...basePayload, type: 'refresh' },
+                {
+                    secret: refreshTokenSecret,
+                    expiresIn: parseInt(refreshTokenExp, 10),
+                },
+            ),
         ]);
 
         return {
@@ -66,5 +79,19 @@ export class TokenService {
         if (!user || !user.currentRefreshToken) return false;
 
         return bcrypt.compare(refreshToken, user.currentRefreshToken);
+    }
+
+    extractTokenFromHandshake(client: AuthSocket): string | null {
+        const authHeader = client.handshake.headers.authorization;
+        if (authHeader && authHeader.split(' ')[0] === 'Bearer') {
+            return authHeader.split(' ')[1];
+        }
+
+        const authQuery = client.handshake.query.token as string;
+        if (authQuery) {
+            return authQuery;
+        }
+
+        return null;
     }
 }

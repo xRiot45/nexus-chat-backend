@@ -1,6 +1,6 @@
-// src/users/dto/user-response.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
+import { UserEntity } from '../entities/user.entity';
 
 export class UserResponseDto {
     @ApiProperty({
@@ -58,4 +58,26 @@ export class UserResponseDto {
     })
     @Expose()
     createdAt: Date;
+
+    @ApiProperty({
+        example: '2026-01-01T10:00:00.000Z',
+        description: 'Account last update timestamp',
+    })
+    @Expose()
+    updatedAt: Date;
+
+    constructor(user: Partial<UserEntity>) {
+        if (!user) return;
+
+        this.id = user.id ?? '';
+        this.username = user.username ?? '';
+        this.fullName = user.fullName ?? '';
+        this.email = user.email ?? '';
+        this.avatarUrl = user.avatarUrl ?? '';
+        this.bio = user.bio ?? '';
+        this.emailVerifiedAt = user.emailVerifiedAt ?? null;
+        this.isVerified = user.isVerified ?? false;
+        this.createdAt = user.createdAt ?? new Date();
+        this.updatedAt = user.updatedAt ?? new Date();
+    }
 }

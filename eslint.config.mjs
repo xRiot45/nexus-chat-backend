@@ -37,6 +37,7 @@ export default tseslint.config(
                 { selector: 'class', format: ['PascalCase'] },
                 { selector: 'variable', format: ['camelCase', 'UPPER_CASE'] },
             ],
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
 
             // --- ASYNC & PROMISE (Mencegah Bug Logic) ---
             '@typescript-eslint/no-floating-promises': 'error', // Pastikan semua async function di-'await' atau di-handle

@@ -1,4 +1,6 @@
 import { UserStatus } from 'src/common/enums/user-status.enum';
+import { ConversationEntity } from 'src/modules/chat/entities/conversation.entity';
+import { MessageEntity } from 'src/modules/chat/entities/message.entity';
 import { ContactEntity } from 'src/modules/contacts/entities/contact.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
 import { Column, Entity, OneToMany } from 'typeorm';
@@ -53,9 +55,25 @@ export class UserEntity extends BaseEntity {
 
     // --- Relations ---
 
+    // TODO --- Relasi Contact Management Feature ---
+
     @OneToMany(() => ContactEntity, contact => contact.user)
     contacts: ContactEntity[];
 
     @OneToMany(() => ContactEntity, contact => contact.contactUser)
     addedBy: ContactEntity[];
+
+    // TODO --- Relasi Chat Feature ---
+
+    // 1. Relasi ke Conversation sebagai CREATOR (Yang memulai chat)
+    @OneToMany(() => ConversationEntity, conversation => conversation.creator)
+    conversationsInitiated: ConversationEntity[];
+
+    // 2. Relasi ke Conversation sebagai RECIPIENT (Lawan bicara)
+    @OneToMany(() => ConversationEntity, conversation => conversation.recipient)
+    conversationsReceived: ConversationEntity[];
+
+    // 3. Relasi ke Message sebagai SENDER (Pengirim pesan)
+    @OneToMany(() => MessageEntity, message => message.sender)
+    messagesSent: MessageEntity[];
 }
