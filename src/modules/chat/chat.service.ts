@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { Repository } from 'typeorm';
@@ -17,51 +17,56 @@ export class ChatService {
         private readonly logger: LoggerService,
     ) {}
 
-    async sendMessage(senderId: string, createMessageDto: CreateMessageDto): Promise<MessageResponseDto> {
+    async sendMessage(senderId: string, dto: CreateMessageDto): Promise<MessageResponseDto> {
         const context = `${ChatService.name}.sendMessage`;
-        const { recipientId, content } = createMessageDto;
-
-        this.logger.log(`Sending message from ${senderId} to ${recipientId}`, context);
-
-        let conversation = await this.conversationRepository.findOne({
-            where: [
-                { creatorId: senderId, recipientId: recipientId },
-                { creatorId: recipientId, recipientId: senderId },
-            ],
-        });
-
-        if (!conversation) {
-            this.logger.log(`Creating new conversation between ${senderId} and ${recipientId}`, context);
-            conversation = this.conversationRepository.create({
-                creatorId: senderId,
-                recipientId: recipientId,
-            });
-
-            await this.conversationRepository.save(conversation);
-        }
+        const { recipientId, content } = dto;
 
         try {
-            const message = this.messageRepository.create({
-                content: content,
-                senderId: senderId,
-                conversationId: conversation.id,
+            this.logger.log(`Processing message: ${senderId} -> ${recipientId}`, context);
+
+            let conversation = await this.conversationRepository.findOne({
+                where: [
+                    { creatorId: senderId, recipientId: recipientId },
+                    { creatorId: recipientId, recipientId: senderId },
+                ],
             });
 
-            const savedMessage = await this.messageRepository.save(message);
+            if (!conversation) {
+                this.logger.log(`Creating new conversation record`, context);
+                conversation = await this.conversationRepository.save(
+                    this.conversationRepository.create({
+                        creatorId: senderId,
+                        recipientId: recipientId,
+                    }),
+                );
+            }
+
+            const messageData = this.messageRepository.create({
+                content,
+                senderId,
+                conversationId: conversation.id,
+            });
+            const savedMessage = await this.messageRepository.save(messageData);
             const fullMessage = await this.messageRepository.findOne({
                 where: { id: savedMessage.id },
                 relations: ['sender'],
             });
 
             if (!fullMessage) {
-                this.logger.error('Failed to send message', context);
-                throw new InternalServerErrorException('Failed to send message');
+                throw new NotFoundException(`Message ${savedMessage.id} could not be retrieved`);
             }
 
+            this.logger.log(`Message delivered successfully. ID: ${fullMessage.id}`, context);
+
             return new MessageResponseDto(fullMessage);
-        } catch (error) {
-            this.logger.error(`Failed to send message: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to send message');
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            const stack = error instanceof Error ? error.stack : '';
+
+            this.logger.error(`Failed to send message: ${errorMessage}`, stack, context);
+
+            if (error instanceof NotFoundException) throw error;
+            throw new InternalServerErrorException('Chat service encountered an error');
         }
     }
 }
