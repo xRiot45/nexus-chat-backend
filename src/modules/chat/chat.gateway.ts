@@ -65,6 +65,12 @@ export class ChatGateway implements OnGatewayConnection {
                 lastSeenAt: new Date(),
             });
 
+            this.server.emit('userStatusChanged', {
+                userId: user.sub,
+                status: UserStatus.ONLINE,
+                lastSeenAt: new Date(),
+            });
+
             this.logger.log(`User ${user.sub} connected`, context);
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -86,9 +92,26 @@ export class ChatGateway implements OnGatewayConnection {
         if (userId) {
             await this.userRepository.update(userId, {
                 status: UserStatus.OFFLINE,
+                lastSeenAt: new Date(),
             });
+
+            this.server.emit('userStatusChanged', {
+                userId: userId,
+                status: UserStatus.OFFLINE,
+                lastSeenAt: new Date(),
+            });
+
             this.logger.log(`User ${userId} disconnected`, ChatGateway.name);
         }
+    }
+
+    /**
+     * Resets the status of all users to offline on startup.
+     * @return {Promise<void>} A promise that resolves when the update operation is complete.
+     */
+    async onModuleInit(): Promise<void> {
+        await this.userRepository.update({ status: UserStatus.ONLINE }, { status: UserStatus.OFFLINE });
+        this.logger.log('Reset all users to offline on startup', 'System');
     }
 
     /**
