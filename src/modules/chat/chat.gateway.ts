@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
     ConnectedSocket,
@@ -14,6 +13,7 @@ import { UserStatus } from 'src/common/enums/user-status.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { TokenService } from 'src/core/services/token.service';
 import { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
+import { ChatUtils } from 'src/shared/utils/chat.utils';
 import { Repository } from 'typeorm';
 import { UserEntity } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
@@ -43,14 +43,22 @@ export class ChatGateway implements OnGatewayConnection {
         private readonly tokenService: TokenService,
     ) {}
 
+    /**
+     * Handle a new connection from a client.
+     * Authenticate the client using the JWT token in the Authorization header.
+     * If authentication is successful, update the user's status to ONLINE.
+     * If authentication fails, emit an exception event to the client with a status of 'error' and a message of 'Unauthorized'. Disconnect the client.
+     * @param client The connected socket client.
+     * @returns A promise that resolves when the connection is handled.
+     */
     async handleConnection(client: AuthenticatedSocket): Promise<void> {
         const context = `${ChatGateway.name}.handleConnection`;
 
         try {
-            const user = await this.authenticate(client);
+            const user = await this.tokenService.authenticateSocket(client);
             client.data.user = user;
 
-            await client.join(this.getUserRoom(user?.sub));
+            await client.join(ChatUtils.getUserRoom(user?.sub));
 
             await this.userRepository.update(user.sub, {
                 status: UserStatus.ONLINE,
@@ -67,6 +75,12 @@ export class ChatGateway implements OnGatewayConnection {
         }
     }
 
+    /**
+     * Handles the disconnect event from a client and updates the user's status to OFFLINE.
+     * If the client is authenticated, the user's status is updated to OFFLINE and a log message is written.
+     * @param client The disconnected socket client.
+     * @returns A promise that resolves when the disconnect event is handled.
+     */
     async handleDisconnect(client: AuthenticatedSocket): Promise<void> {
         const userId = client.data.user?.sub;
         if (userId) {
@@ -77,6 +91,13 @@ export class ChatGateway implements OnGatewayConnection {
         }
     }
 
+    /**
+     * Handles the sendMessage event and sends the message to the recipient's room.
+     * @param client The connected socket.
+     * @param dto The CreateMessageDto containing the message details.
+     * @returns A promise of the MessageResponseDto containing the saved message.
+     * @throws Error If an unexpected error occurs during message processing.
+     */
     @SubscribeMessage('sendMessage')
     async handleSendMessage(
         @ConnectedSocket() client: AuthenticatedSocket,
@@ -92,7 +113,7 @@ export class ChatGateway implements OnGatewayConnection {
 
             this.logger.log(`Message successfully saved. ID: ${response.id}`, context);
 
-            const recipientRoom = this.getUserRoom(dto.recipientId);
+            const recipientRoom = ChatUtils.getUserRoom(dto.recipientId);
             this.server.to(recipientRoom).emit('message', response); // kirim pesan ke room penerima
 
             this.logger.log(`Message sent to room: ${recipientRoom}`, context);
@@ -107,18 +128,21 @@ export class ChatGateway implements OnGatewayConnection {
         }
     }
 
-    private async authenticate(client: AuthenticatedSocket): Promise<JwtPayload> {
-        const context = `${ChatGateway.name}.authenticate`;
-        const token = this.tokenService.extractToken(client);
-        if (!token) {
-            this.logger.warn(`Client connected without token: ${client.id}`, context);
-            throw new UnauthorizedException('Authentication token missing');
-        }
+    /**
+     * Handles the getMessages event and retrieves the chat history for the given user and recipient.
+     * @param client The connected socket.
+     * @param data The object containing the recipientId, limit, and offset.
+     * @returns A promise of the MessageResponseDto array containing the chat history.
+     */
+    @SubscribeMessage('getMessages')
+    async handleGetMessages(
+        @ConnectedSocket() client: AuthenticatedSocket,
+        @MessageBody() data: { recipientId: string; limit?: number; offset?: number },
+    ): Promise<MessageResponseDto[]> {
+        const context = `${ChatGateway.name}.handleGetMessages`;
+        this.logger.log(`Event getMessages received: ${JSON.stringify(data)}`, context);
 
-        return this.tokenService.verifyAccessToken(token);
-    }
-
-    private getUserRoom(userId: string): string {
-        return `user_room_${userId}`;
+        const userId = client.data.user?.sub;
+        return this.chatService.getMessages(userId, data.recipientId, data.limit, data.offset);
     }
 }

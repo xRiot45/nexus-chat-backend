@@ -122,4 +122,13 @@ export class TokenService {
             throw new UnauthorizedException(`Token verification failed: ${message}`);
         }
     }
+
+    async authenticateSocket(client: Socket): Promise<JwtPayload> {
+        const token = this.extractToken(client);
+        if (!token) {
+            throw new UnauthorizedException('Authentication token missing');
+        }
+
+        return this.verifyAccessToken(token);
+    }
 }
