@@ -1,3 +1,4 @@
+import { InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
     ConnectedSocket,
@@ -42,6 +43,15 @@ export class ChatGateway implements OnGatewayConnection {
         private readonly logger: LoggerService,
         private readonly tokenService: TokenService,
     ) {}
+
+    /**
+     * Resets the status of all users to offline on startup.
+     * @return {Promise<void>} A promise that resolves when the update operation is complete.
+     */
+    async onModuleInit(): Promise<void> {
+        await this.userRepository.update({ status: UserStatus.ONLINE }, { status: UserStatus.OFFLINE });
+        this.logger.log('Reset all users to offline on startup', 'System');
+    }
 
     /**
      * Handle a new connection from a client.
@@ -106,15 +116,6 @@ export class ChatGateway implements OnGatewayConnection {
     }
 
     /**
-     * Resets the status of all users to offline on startup.
-     * @return {Promise<void>} A promise that resolves when the update operation is complete.
-     */
-    async onModuleInit(): Promise<void> {
-        await this.userRepository.update({ status: UserStatus.ONLINE }, { status: UserStatus.OFFLINE });
-        this.logger.log('Reset all users to offline on startup', 'System');
-    }
-
-    /**
      * Handles the sendMessage event and sends the message to the recipient's room.
      * @param client The connected socket.
      * @param dto The CreateMessageDto containing the message details.
@@ -167,5 +168,48 @@ export class ChatGateway implements OnGatewayConnection {
 
         const userId = client.data.user?.sub;
         return this.chatService.getMessages(userId, data.recipientId, data.limit, data.offset);
+    }
+
+    /**
+     * Handles the markConversationAsRead event and marks the conversation as read by the given user.
+     * If the conversation does not exist, an InternalServerErrorException is thrown.
+     * If no active sockets are found in the recipient's room, a log warning is written and the message read event is skipped.
+     * @param client The connected socket.
+     * @param data The object containing the conversationId and recipientId.
+     * @throws {InternalServerErrorException} If an unexpected error occurs during the marking of the conversation as read.
+     */
+    @SubscribeMessage('markConversationAsRead')
+    async handleMarkConversationAsRead(
+        @ConnectedSocket() client: AuthenticatedSocket,
+        @MessageBody() data: { conversationId: string; recipientId: string },
+    ): Promise<void> {
+        const context = `${ChatGateway.name}.handleMarkConversationAsRead`;
+        this.logger.log(`Event markConversationAsRead received: ${JSON.stringify(data)}`, context);
+
+        try {
+            const userId = client.data.user?.sub;
+            const lastReadMessageId = await this.chatService.markConversationAsRead(userId, data.conversationId);
+
+            if (lastReadMessageId) {
+                const targetRoom = ChatUtils.getUserRoom(data.recipientId);
+
+                const sockets = await this.server.in(targetRoom).fetchSockets();
+                this.logger.log(`Target Room: ${targetRoom} | Active Sockets: ${sockets.length}`, context);
+
+                if (sockets.length === 0) {
+                    this.logger.warn(`Message read event skipped. No active sockets in ${targetRoom}`, context);
+                }
+
+                this.server.to(targetRoom).emit('messageRead', {
+                    conversationId: data.conversationId,
+                    readBy: userId,
+                    lastReadMessageId: lastReadMessageId,
+                });
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to mark conversation as read: ${message}`, (error as Error).stack, context);
+            throw new InternalServerErrorException('Could not mark conversation as read');
+        }
     }
 }

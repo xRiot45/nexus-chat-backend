@@ -30,4 +30,18 @@ export class MessageEntity extends BaseEntity {
     @ManyToOne(() => ConversationEntity, conversation => conversation.messages)
     @JoinColumn({ name: 'conversationId' })
     conversation: ConversationEntity;
+
+    @Column({
+        name: 'isRead',
+        type: 'boolean',
+        default: false,
+    })
+    isRead: boolean;
+
+    @Column({
+        name: 'readAt',
+        type: 'timestamp',
+        nullable: true,
+    })
+    readAt: Date | null;
 }

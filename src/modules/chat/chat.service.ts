@@ -2,7 +2,7 @@ import { Injectable, InternalServerErrorException, NotFoundException } from '@ne
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
@@ -164,6 +164,44 @@ export class ChatService {
             const message = error instanceof Error ? error.message : 'Unknown error';
             this.logger.error(`Failed to get conversations: ${message}`, (error as Error).stack, context);
             throw new InternalServerErrorException('Could not fetch conversations');
+        }
+    }
+
+    /**
+     * Marks a conversation as read by the given user.
+     * The last message sent by the other user in the conversation will be marked as read.
+     * The ID of the last message will be returned, or null if no message was marked as read.
+     * @param {string} userId - The ID of the user marking the conversation as read.
+     * @param {string} conversationId - The ID of the conversation to mark as read.
+     * @returns {Promise<string | null>} A promise that resolves to the ID of the last message marked as read, or null if no message was marked as read.
+     * @throws {InternalServerErrorException} If an unexpected error occurs during the marking of the conversation as read.
+     */
+    async markConversationAsRead(userId: string, conversationId: string): Promise<string | null> {
+        const context = `${ChatService.name}.markConversationAsRead`;
+
+        try {
+            await this.messageRepository.update(
+                {
+                    conversationId,
+                    senderId: Not(userId),
+                    isRead: false,
+                },
+                {
+                    isRead: true,
+                    readAt: new Date(),
+                },
+            );
+
+            const lastMessage = await this.messageRepository.findOne({
+                where: { conversationId, senderId: Not(userId) },
+                order: { createdAt: 'DESC' },
+            });
+
+            return lastMessage?.id ?? null;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to mark conversation as read: ${message}`, (error as Error).stack, context);
+            throw new InternalServerErrorException('Could not mark conversation as read');
         }
     }
 }
