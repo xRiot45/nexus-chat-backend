@@ -1,5 +1,6 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
-import type { AuthenticatedRequest } from 'src/shared/interfaces/authenticated-request.interface';
+import { Body, Controller, Post } from '@nestjs/common';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
@@ -10,9 +11,9 @@ export class ChatController {
 
     @Post()
     async createMessage(
-        @Req() req: AuthenticatedRequest,
+        @CurrentUser() user: JwtPayload,
         @Body() createMessageDto: CreateMessageDto,
     ): Promise<MessageResponseDto> {
-        return this.chatService.sendMessage(req.user.sub, createMessageDto);
+        return this.chatService.sendMessage(user?.sub, createMessageDto);
     }
 }

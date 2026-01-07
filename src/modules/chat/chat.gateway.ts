@@ -1,6 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
     ConnectedSocket,
     MessageBody,
@@ -10,98 +9,116 @@ import {
     WebSocketServer,
 } from '@nestjs/websockets';
 import { instanceToPlain } from 'class-transformer';
-import { Server, Socket } from 'socket.io';
+import { DefaultEventsMap, Server, Socket } from 'socket.io';
+import { UserStatus } from 'src/common/enums/user-status.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { TokenService } from 'src/core/services/token.service';
 import { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
+import { Repository } from 'typeorm';
+import { UserEntity } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
+import { ClientToServerEvents, ServerToClientEvents } from './interfaces/chat.interface';
 
 interface SocketData {
     user: JwtPayload;
 }
 
-interface CustomEvents {
-    event1: unknown;
-    event2: unknown;
-}
+export type AuthenticatedSocket = Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>;
 
-export type AuthSocket = Socket<CustomEvents, CustomEvents, CustomEvents, SocketData>;
-
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+    cors: { origin: '*' },
+    namespace: 'chat',
+})
 export class ChatGateway implements OnGatewayConnection {
     @WebSocketServer()
-    server: Server;
+    private readonly server: Server<ClientToServerEvents, ServerToClientEvents>;
 
     constructor(
+        @InjectRepository(UserEntity)
+        private readonly userRepository: Repository<UserEntity>,
         private readonly chatService: ChatService,
         private readonly logger: LoggerService,
-        private readonly jwtService: JwtService,
-        private readonly configService: ConfigService,
         private readonly tokenService: TokenService,
     ) {}
 
-    async handleConnection(client: AuthSocket): Promise<void> {
+    async handleConnection(client: AuthenticatedSocket): Promise<void> {
         const context = `${ChatGateway.name}.handleConnection`;
+
         try {
-            const token = this.tokenService.extractTokenFromHandshake(client);
-            if (!token) {
-                this.logger.warn(`Client connected without token: ${client.id}`, context);
-                throw new UnauthorizedException('Authentication token missing');
-            }
+            const user = await this.authenticate(client);
+            client.data.user = user;
 
-            const secret = this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET');
-            if (!secret) {
-                this.logger.error('Server configuration error: JWT Secret missing', context);
-                throw new UnauthorizedException('Authentication token missing');
-            }
+            await client.join(this.getUserRoom(user?.sub));
 
-            const payload = this.jwtService.verify(token, {
-                secret: secret,
-            }) as JwtPayload;
+            await this.userRepository.update(user.sub, {
+                status: UserStatus.ONLINE,
+                lastSeenAt: new Date(),
+            });
 
-            client.data.user = payload;
+            this.logger.log(`User ${user.sub} connected`, context);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.warn(`Auth failed: ${errorMessage}`, context);
 
-            await client.join(`user_${payload.sub}`);
-
-            this.logger.log(`Client connected: ${client.id}`, context);
-        } catch (error) {
-            if (error instanceof UnauthorizedException) {
-                client.disconnect();
-                return;
-            }
-
-            this.logger.error(`Failed to connect client: ${(error as Error).message}`, context);
-            client.disconnect();
+            client.emit('exception', { status: 'error', message: 'Unauthorized' });
+            client.disconnect(true);
         }
     }
 
-    handleDisconnect(client: AuthSocket): void {
-        const context = `${ChatGateway.name}.handleDisconnect`;
+    async handleDisconnect(client: AuthenticatedSocket): Promise<void> {
         const userId = client.data.user?.sub;
         if (userId) {
-            this.logger.log(`Client disconnected: ${client.id}`, context);
+            await this.userRepository.update(userId, {
+                status: UserStatus.OFFLINE,
+            });
+            this.logger.log(`User ${userId} disconnected`, ChatGateway.name);
         }
     }
 
-    // Event untuk Pengirim Pesan
     @SubscribeMessage('sendMessage')
     async handleSendMessage(
-        @ConnectedSocket() client: AuthSocket,
-        @MessageBody() createMessageDto: CreateMessageDto,
+        @ConnectedSocket() client: AuthenticatedSocket,
+        @MessageBody() dto: CreateMessageDto,
     ): Promise<MessageResponseDto> {
         const context = `${ChatGateway.name}.handleSendMessage`;
-        const senderId = client.data.user?.sub;
+        this.logger.log(`Event sendMessage received: ${JSON.stringify(dto)}`, context);
 
-        if (!senderId) {
+        try {
+            const senderId = client.data.user.sub;
+            const savedMsg = await this.chatService.sendMessage(senderId, dto);
+            const response = instanceToPlain(savedMsg) as MessageResponseDto;
+
+            this.logger.log(`Message successfully saved. ID: ${response.id}`, context);
+
+            const recipientRoom = this.getUserRoom(dto.recipientId);
+            this.server.to(recipientRoom).emit('message', response); // kirim pesan ke room penerima
+
+            this.logger.log(`Message sent to room: ${recipientRoom}`, context);
+            return response;
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorStack = error instanceof Error ? error.stack : '';
+
+            this.logger.error(`Failed to send message: ${errorMessage}`, errorStack, context);
+
+            throw error;
+        }
+    }
+
+    private async authenticate(client: AuthenticatedSocket): Promise<JwtPayload> {
+        const context = `${ChatGateway.name}.authenticate`;
+        const token = this.tokenService.extractToken(client);
+        if (!token) {
             this.logger.warn(`Client connected without token: ${client.id}`, context);
             throw new UnauthorizedException('Authentication token missing');
         }
 
-        const savedMsg = await this.chatService.sendMessage(senderId, createMessageDto);
-        this.server.to(`user_${createMessageDto?.recipientId}`).emit('message', instanceToPlain(savedMsg));
+        return this.tokenService.verifyAccessToken(token);
+    }
 
-        return savedMsg;
+    private getUserRoom(userId: string): string {
+        return `user_room_${userId}`;
     }
 }

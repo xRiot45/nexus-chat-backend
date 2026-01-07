@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { AuthSocket } from 'src/modules/chat/chat.gateway';
+import { Request } from 'express';
+import { Socket } from 'socket.io';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
+import { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { Repository } from 'typeorm';
 
 interface Tokens {
@@ -81,17 +83,43 @@ export class TokenService {
         return bcrypt.compare(refreshToken, user.currentRefreshToken);
     }
 
-    extractTokenFromHeaders(client: AuthSocket): string | null {
-        const authHeader = client.handshake.headers.authorization;
-        if (authHeader && authHeader.split(' ')[0] === 'Bearer') {
+    extractToken(source: Request | Socket): string | null {
+        const headers = 'headers' in source ? source.headers : source.handshake.headers;
+        const authHeader = headers?.authorization;
+
+        if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
             return authHeader.split(' ')[1];
         }
 
-        const authQuery = client.handshake.query.token as string;
-        if (authQuery) {
-            return authQuery;
+        const query = 'query' in source ? source.query : source.handshake.query;
+        const token = query?.token;
+
+        if (token && typeof token === 'string') {
+            return token;
         }
 
         return null;
+    }
+
+    async verifyAccessToken(token: string): Promise<JwtPayload> {
+        const secret = this.configService.get<string>('JWT_ACCESS_TOKEN_SECRET');
+        if (!secret) {
+            throw new UnauthorizedException('Authentication token missing');
+        }
+
+        try {
+            const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
+                secret: secret,
+            });
+
+            if (payload.type !== 'access') {
+                throw new UnauthorizedException('Invalid token type');
+            }
+
+            return payload;
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            throw new UnauthorizedException(`Token verification failed: ${message}`);
+        }
     }
 }
