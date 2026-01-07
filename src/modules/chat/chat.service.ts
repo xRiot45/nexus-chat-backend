@@ -1,7 +1,9 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { Repository } from 'typeorm';
+import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { ConversationEntity } from './entities/conversation.entity';
@@ -124,6 +126,44 @@ export class ChatService {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             this.logger.error(`Failed to fetch messages: ${errorMessage}`, (error as Error).stack, context);
             throw new InternalServerErrorException('Could not retrieve chat history');
+        }
+    }
+
+    /**
+     * Retrieves a list of conversations for a given user.
+     *
+     * @param {string} userId - The ID of the user to fetch the conversations for.
+     * @return {Promise<ConversationResponseDto[]>} A promise that resolves to an array of ConversationResponseDto objects representing the conversations.
+     * @throws {InternalServerErrorException} If an unexpected error occurs during the retrieval of the conversations.
+     */
+    async getConversations(userId: string): Promise<ConversationResponseDto[]> {
+        const context = `${ChatService.name}.getConversations`;
+
+        try {
+            this.logger.log(`Fetching conversation list for user: ${userId}`, context);
+
+            const conversations = await this.conversationRepository
+                .createQueryBuilder('conversation')
+                .leftJoinAndSelect('conversation.creator', 'creator')
+                .leftJoinAndSelect('conversation.recipient', 'recipient')
+                .leftJoinAndSelect(
+                    'conversation.messages',
+                    'lastMessage',
+                    'lastMessage.id = (SELECT m.id FROM messages m WHERE m.conversationId = conversation.id ORDER BY m.createdAt DESC LIMIT 1)',
+                )
+                .where('conversation.creatorId = :userId OR conversation.recipientId = :userId', { userId })
+                .orderBy('lastMessage.createdAt', 'DESC')
+                .getMany();
+
+            this.logger.log(`Found ${conversations.length} conversations`, context);
+
+            return plainToInstance(ConversationResponseDto, conversations, {
+                excludeExtraneousValues: false,
+            });
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get conversations: ${message}`, (error as Error).stack, context);
+            throw new InternalServerErrorException('Could not fetch conversations');
         }
     }
 }
