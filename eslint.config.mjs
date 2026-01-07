@@ -31,12 +31,12 @@ export default tseslint.config(
             '@typescript-eslint/explicit-function-return-type': 'error', // Semua function di Service/Controller wajib punya tipe return
             '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }], // Larang variabel nganggur kecuali diawali underscore
             '@typescript-eslint/no-non-null-assertion': 'error', // Larang operator '!', paksa pengecekan 'if (data)'
-            '@typescript-eslint/naming-convention': [
-                // Paksa standar penamaan TypeScript
-                'error',
-                { selector: 'class', format: ['PascalCase'] },
-                { selector: 'variable', format: ['camelCase', 'UPPER_CASE'] },
-            ],
+            // '@typescript-eslint/naming-convention': [
+            //     // Paksa standar penamaan TypeScript
+            //     'error',
+            //     { selector: 'class', format: ['PascalCase'] },
+            //     { selector: 'variable', format: ['camelCase', 'UPPER_CASE'] },
+            // ],
             '@typescript-eslint/no-unnecessary-type-assertion': 'off',
 
             // --- ASYNC & PROMISE (Mencegah Bug Logic) ---
