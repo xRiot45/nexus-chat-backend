@@ -81,7 +81,7 @@ export class TokenService {
         return bcrypt.compare(refreshToken, user.currentRefreshToken);
     }
 
-    extractTokenFromHandshake(client: AuthSocket): string | null {
+    extractTokenFromHeaders(client: AuthSocket): string | null {
         const authHeader = client.handshake.headers.authorization;
         if (authHeader && authHeader.split(' ')[0] === 'Bearer') {
             return authHeader.split(' ')[1];
