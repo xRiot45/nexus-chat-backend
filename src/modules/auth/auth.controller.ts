@@ -74,7 +74,7 @@ export class AuthController {
 
         try {
             await this.authService.verifyEmail(token);
-            return res.redirect(`${frontendUrl}/verify-email?status=success`);
+            return res.redirect(`${frontendUrl}/auth/verify-email?status=success`);
         } catch (error: unknown) {
             let errorCode = 'UNKNOWN_ERROR';
 
@@ -84,7 +84,7 @@ export class AuthController {
                 errorCode = 'ALREADY_VERIFIED';
             }
 
-            return res.redirect(`${frontendUrl}/verify-email?status=failed&code=${errorCode}`);
+            return res.redirect(`${frontendUrl}/auth/verify-email?status=failed&code=${errorCode}`);
         }
     }
 
