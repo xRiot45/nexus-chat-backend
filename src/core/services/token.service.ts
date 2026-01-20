@@ -84,6 +84,7 @@ export class TokenService {
     }
 
     extractToken(source: Request | Socket): string | null {
+        //  (Standard HTTP/Postman)
         const headers = 'headers' in source ? source.headers : source.handshake.headers;
         const authHeader = headers?.authorization;
 
@@ -91,6 +92,15 @@ export class TokenService {
             return authHeader.split(' ')[1];
         }
 
+        // (Standard Socket.io Client)
+        if ('handshake' in source && source.handshake.auth?.token) {
+            const authPayload = source.handshake.auth.token as string | string[];
+            if (typeof authPayload === 'string') {
+                return authPayload.startsWith('Bearer ') ? authPayload.split(' ')[1] : authPayload;
+            }
+        }
+
+        // Query String (Fallback)
         const query = 'query' in source ? source.query : source.handshake.query;
         const token = query?.token;
 
