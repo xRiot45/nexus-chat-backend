@@ -29,7 +29,10 @@ interface SocketData {
 export type AuthenticatedSocket = Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>;
 
 @WebSocketGateway({
-    cors: { origin: '*' },
+    cors: {
+        origin: 'http://localhost:3001',
+        credentials: true,
+    },
     namespace: 'chat',
 })
 export class ChatGateway implements OnGatewayConnection {
