@@ -130,17 +130,24 @@ export class ChatService {
     }
 
     /**
-     * Retrieves a list of conversations for a given user.
+     * Retrieves a comprehensive list of chat conversations for a specific user,
+     * including the participants' profiles and the single most recent message
+     * for each conversation to populate the "Recent Messages" sidebar/list.
+     * * Key operations:
+     * 1. Filters conversations where the user is either the creator or the recipient.
+     * 2. Performs a left join with a subquery to fetch only the latest message per conversation.
+     * 3. Orders the entire list chronologically based on the last message's timestamp (Newest first).
      *
-     * @param {string} userId - The ID of the user to fetch the conversations for.
-     * @return {Promise<ConversationResponseDto[]>} A promise that resolves to an array of ConversationResponseDto objects representing the conversations.
-     * @throws {InternalServerErrorException} If an unexpected error occurs during the retrieval of the conversations.
+     * @param {string} userId - The unique identifier of the user whose conversation history is being retrieved.
+     * @return {Promise<ConversationResponseDto[]>} A promise that resolves to an array of DTOs containing
+     * conversation metadata, participant info, and the latest message snippet.
+     * @throws {InternalServerErrorException} If a database connection error or an unexpected query failure occurs.
      */
-    async getConversations(userId: string): Promise<ConversationResponseDto[]> {
-        const context = `${ChatService.name}.getConversations`;
+    async getUserRecentConversationsWithLastMessage(userId: string): Promise<ConversationResponseDto[]> {
+        const context = `${ChatService.name}.getUserRecentConversationsWithLastMessage`;
 
         try {
-            this.logger.log(`Fetching conversation list for user: ${userId}`, context);
+            this.logger.log(`Initiating retrieval of recent conversations for user ID: ${userId}`, context);
 
             const conversations = await this.conversationRepository
                 .createQueryBuilder('conversation')
@@ -148,22 +155,30 @@ export class ChatService {
                 .leftJoinAndSelect('conversation.recipient', 'recipient')
                 .leftJoinAndSelect(
                     'conversation.messages',
-                    'lastMessage',
-                    'lastMessage.id = (SELECT m.id FROM messages m WHERE m.conversationId = conversation.id ORDER BY m.createdAt DESC LIMIT 1)',
+                    'messages',
+                    'messages.id = (SELECT m.id FROM messages m WHERE m.conversationId = conversation.id ORDER BY m.createdAt DESC LIMIT 1)',
                 )
                 .where('conversation.creatorId = :userId OR conversation.recipientId = :userId', { userId })
-                .orderBy('lastMessage.createdAt', 'DESC')
+                .orderBy('messages.createdAt', 'DESC')
                 .getMany();
 
-            this.logger.log(`Found ${conversations.length} conversations`, context);
+            this.logger.log(
+                `Successfully retrieved ${conversations.length} active conversations for user: ${userId}`,
+                context,
+            );
 
             return plainToInstance(ConversationResponseDto, conversations, {
-                excludeExtraneousValues: false,
+                excludeExtraneousValues: true,
             });
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            this.logger.error(`Failed to get conversations: ${message}`, (error as Error).stack, context);
-            throw new InternalServerErrorException('Could not fetch conversations');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            this.logger.error(
+                `Critical failure in getUserRecentConversationsWithLastMessage: ${errorMessage}`,
+                (error as Error).stack,
+                context,
+            );
+
+            throw new InternalServerErrorException('An unexpected error occurred while fetching your chat list');
         }
     }
 

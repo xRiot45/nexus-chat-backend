@@ -36,7 +36,9 @@ export class ChatController {
         auth: true,
     })
     @UseGuards(JwtAuthGuard)
-    async getConversations(@CurrentUser() user: JwtPayload): Promise<ConversationResponseDto[]> {
-        return this.chatService.getConversations(user.sub);
+    async getUserRecentConversationsWithLastMessage(
+        @CurrentUser() user: JwtPayload,
+    ): Promise<ConversationResponseDto[]> {
+        return this.chatService.getUserRecentConversationsWithLastMessage(user.sub);
     }
 }
