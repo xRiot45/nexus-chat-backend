@@ -28,10 +28,11 @@ export class ChatController {
         return this.chatService.getMessages(user?.sub, recipientId, limit, offset);
     }
 
-    @Get('conversations')
+    @Get('recent-messages')
     @ApiDocGenericResponse({
-        summary: 'Get conversations',
-        description: 'List of conversations',
+        summary: 'Get recent conversations with last message',
+        description:
+            'Retrieves a list of conversations for the current user, including the most recent message snippet for each.',
         response: ConversationResponseDto,
         auth: true,
     })
