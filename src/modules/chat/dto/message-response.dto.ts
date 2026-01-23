@@ -25,7 +25,9 @@ export class MessageResponseDto {
     @Expose()
     senderId: string;
 
-    @ApiProperty({ type: UserResponseDto })
+    @ApiProperty({
+        type: UserResponseDto,
+    })
     @Type(() => UserResponseDto)
     @Expose()
     sender: UserResponseDto;
@@ -36,6 +38,20 @@ export class MessageResponseDto {
     })
     @Expose()
     conversationId: string;
+
+    @ApiProperty({
+        example: false,
+        description: 'True if the message has been read by the recipient',
+    })
+    @Expose()
+    isRead: boolean;
+
+    @ApiProperty({
+        example: '2023-08-31T10:00:00.000Z',
+        description: 'The read date and time of the message',
+    })
+    @Expose()
+    readAt: Date;
 
     @ApiProperty({
         example: '2023-08-31T10:00:00.000Z',
@@ -58,6 +74,8 @@ export class MessageResponseDto {
         this.content = message.content ?? '';
         this.senderId = message.senderId ?? '';
         this.conversationId = message.conversationId ?? '';
+        this.isRead = message.isRead ?? false;
+        this.readAt = message.readAt ?? new Date();
         this.createdAt = message.createdAt ?? new Date();
         this.updatedAt = message.updatedAt ?? new Date();
 

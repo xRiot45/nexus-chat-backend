@@ -8,7 +8,7 @@ import {
     WebSocketGateway,
     WebSocketServer,
 } from '@nestjs/websockets';
-import { instanceToPlain } from 'class-transformer';
+import { plainToInstance } from 'class-transformer';
 import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
@@ -20,7 +20,7 @@ import { UserEntity } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
-import { ClientToServerEvents, ServerToClientEvents } from './interfaces/chat.interface';
+import { ClientToServerEvents, ServerToClientEvents } from './interfaces/socket.interface';
 
 interface SocketData {
     user: JwtPayload;
@@ -136,12 +136,14 @@ export class ChatGateway implements OnGatewayConnection {
         try {
             const senderId = client.data.user.sub;
             const savedMsg = await this.chatService.sendMessage(senderId, dto);
-            const response = instanceToPlain(savedMsg) as MessageResponseDto;
+            const response = plainToInstance(MessageResponseDto, savedMsg, {
+                excludeExtraneousValues: true,
+            });
 
             this.logger.log(`Message successfully saved. ID: ${response.id}`, context);
 
             const recipientRoom = ChatUtils.getUserRoom(dto.recipientId);
-            this.server.to(recipientRoom).emit('message', response); // kirim pesan ke room penerima
+            this.server.to(recipientRoom).emit('message', response);
 
             this.logger.log(`Message sent to room: ${recipientRoom}`, context);
             return response;
