@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
 import { applyDecorators, HttpStatus, Type } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiResponseOptions } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiResponseOptions } from '@nestjs/swagger';
 
 interface ApiDocOptions {
     summary: string;
@@ -9,6 +9,7 @@ interface ApiDocOptions {
     response?: Type<unknown>;
     status?: HttpStatus;
     auth?: boolean;
+    isMultipart?: boolean;
     extraResponses?: ApiResponseOptions[];
 }
 
@@ -19,7 +20,16 @@ export function ApiDocGenericResponse(
     propertyKey?: string | symbol,
     descriptor?: TypedPropertyDescriptor<Y>,
 ) => void {
-    const { summary, description, body, response, status = HttpStatus.OK, auth = false, extraResponses = [] } = options;
+    const {
+        summary,
+        description,
+        body,
+        response,
+        status = HttpStatus.OK,
+        auth = false,
+        isMultipart = false,
+        extraResponses = [],
+    } = options;
 
     const decorators: Array<ClassDecorator | MethodDecorator | PropertyDecorator> = [
         ApiOperation({ summary, description }),
@@ -35,9 +45,10 @@ export function ApiDocGenericResponse(
         ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, description: 'Internal server error' }),
     ];
 
+    // Handle Authentication
     if (auth) {
         decorators.push(
-            ApiBearerAuth('JWT-auth'),
+            ApiBearerAuth(),
             ApiResponse({
                 status: HttpStatus.UNAUTHORIZED,
                 description: 'Unauthorized: Access token is missing or invalid',
@@ -49,10 +60,17 @@ export function ApiDocGenericResponse(
         );
     }
 
+    // Handle Multipart / File Upload
+    if (isMultipart) {
+        decorators.push(ApiConsumes('multipart/form-data'));
+    }
+
+    // Handle Request Body
     if (body) {
         decorators.push(ApiBody({ type: body }));
     }
 
+    // Handle Extra Responses
     if (extraResponses.length > 0) {
         extraResponses.forEach(res => decorators.push(ApiResponse(res)));
     }
