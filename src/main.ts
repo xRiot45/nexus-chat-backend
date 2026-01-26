@@ -1,16 +1,18 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { join } from 'path';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { MainModule } from './main.module';
 
 async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create(MainModule);
+    const app = await NestFactory.create<NestExpressApplication>(MainModule);
     const isDevelopment = process.env.NODE_ENV === 'development';
 
     app.use(
@@ -42,6 +44,9 @@ async function bootstrap(): Promise<void> {
     app.useGlobalFilters(new GlobalExceptionFilter());
     app.useGlobalInterceptors(app.get(ResponseInterceptor));
     app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+    app.useStaticAssets(join(__dirname, '..', 'public'), {
+        prefix: '/api/public/',
+    });
 
     if (isDevelopment) {
         const config = new DocumentBuilder()
