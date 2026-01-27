@@ -2,6 +2,7 @@ import { UserStatus } from 'src/common/enums/user-status.enum';
 import { ConversationEntity } from 'src/modules/chat/entities/conversation.entity';
 import { MessageEntity } from 'src/modules/chat/entities/message.entity';
 import { ContactEntity } from 'src/modules/contacts/entities/contact.entity';
+import { StoryEntity } from 'src/modules/story/entities/story.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
 import { Column, Entity, OneToMany } from 'typeorm';
 
@@ -76,4 +77,8 @@ export class UserEntity extends BaseEntity {
     // 3. Relasi ke Message sebagai SENDER (Pengirim pesan)
     @OneToMany(() => MessageEntity, message => message.sender)
     messagesSent: MessageEntity[];
+
+    // TODO --- Relasi Story Feature ---
+    @OneToMany(() => StoryEntity, story => story.user)
+    stories: StoryEntity[];
 }
