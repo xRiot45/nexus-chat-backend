@@ -55,10 +55,6 @@ export const deleteFile = (relativeFilePath: string | null | undefined): void =>
     const fullPath = path.join(process.cwd(), 'public', cleanPath);
 
     if (fs.existsSync(fullPath)) {
-        try {
-            fs.unlinkSync(fullPath);
-        } catch (err) {
-            console.error(`Failed to delete file at ${fullPath}:`, err);
-        }
+        fs.unlinkSync(fullPath);
     }
 };
