@@ -2,7 +2,7 @@ import { ConflictException, Injectable, InternalServerErrorException, NotFoundEx
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { deleteOldAvatar } from 'src/shared/utils/file-upload.util';
+import { deleteFile } from 'src/shared/utils/file-upload.util';
 import { Repository } from 'typeorm';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -118,7 +118,7 @@ export class UsersService {
 
         if (avatarFile) {
             if (user.avatarUrl) {
-                deleteOldAvatar(user.avatarUrl);
+                deleteFile(user.avatarUrl);
             }
 
             const avatarUrl = `/uploads/avatars/${avatarFile.filename}`;

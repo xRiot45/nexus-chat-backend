@@ -17,7 +17,7 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { BaseResponseDto } from 'src/shared/dto/base-response.dto';
 import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
-import { imageFileFilter, storageConfig } from 'src/shared/utils/file-upload.util';
+import { createStorageConfig, fileFilter } from 'src/shared/utils/file-upload.util';
 import { SearchUserDto } from './dto/search-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -67,8 +67,8 @@ export class UsersController {
     @HttpCode(HttpStatus.OK)
     @UseInterceptors(
         FileInterceptor('avatar', {
-            storage: storageConfig,
-            fileFilter: imageFileFilter,
+            storage: createStorageConfig('avatars'),
+            fileFilter: fileFilter,
             limits: { fileSize: 2 * 1024 * 1024 },
         }),
     )
