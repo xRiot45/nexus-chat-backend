@@ -1,9 +1,10 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
-import { DeepPartial, MoreThan, Repository } from 'typeorm';
+import { DeepPartial, LessThan, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { StoryResponseDto } from './dto/story-response.dto';
@@ -91,6 +92,34 @@ export class StoryService {
         } catch (error) {
             this.logger.error(`Failed to fetch stories: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Failed to fetch user stories');
+        }
+    }
+
+    /**
+     * Runs a daily cron job to clean up expired stories and their associated files.
+     *
+     * @returns A promise that resolves when the cleanup process is complete.
+     * @throws {InternalServerErrorException} If an unexpected error occurs during the cleanup process.
+     */
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    async handleCronExpiredStories(): Promise<void> {
+        const context = `${StoryService.name}.handleCronExpiredStories`;
+        this.logger.log('Running expired story cleanup process...', context);
+
+        try {
+            const expiredStories = await this.storyRepository.find({
+                where: {
+                    expiresAt: LessThan(new Date()),
+                },
+            });
+
+            if (expiredStories.length === 0) {
+                this.logger.log('There are no expired stories to delete.', context);
+                return;
+            }
+        } catch (error) {
+            this.logger.error(`Failed to clear expired stories: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to clear expired stories');
         }
     }
 }
