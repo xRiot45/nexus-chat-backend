@@ -65,4 +65,17 @@ export class StoryController {
     async findActiveStoriesByUserId(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
         return this.storyService.findActiveStoriesByUserId(user.sub);
     }
+
+    @ApiDocGenericResponse({
+        summary: 'Get stories feed (Mutual Contact only)',
+        description: 'Returns stories from users who saved your contact AND you saved theirs.',
+        auth: true,
+        response: StoryResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get('feed')
+    @UseGuards(JwtAuthGuard)
+    async getMutualStoriesFeed(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
+        return this.storyService.getMutualStoriesFeed(user.sub);
+    }
 }

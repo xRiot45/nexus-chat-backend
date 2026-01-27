@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
-import { DeepPartial, LessThan, MoreThan, Repository } from 'typeorm';
+import { DeepPartial, In, LessThan, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { StoryResponseDto } from './dto/story-response.dto';
@@ -96,6 +96,44 @@ export class StoryService {
     }
 
     /**
+     * Retrieves the mutual stories feed for a given user.
+     * The mutual stories feed consists of stories from the user's followers
+     * and the user itself.
+     * @param {string} userId - The ID of the user.
+     * @return {Promise<StoryResponseDto[]>} A promise that resolves to an array of story response DTOs.
+     */
+    async getMutualStoriesFeed(userId: string): Promise<StoryResponseDto[]> {
+        const context = `${StoryService.name}.getMutualStoriesFeed`;
+        this.logger.log(`Fetching mutual stories feed for user: ${userId}`, context);
+
+        try {
+            const followers = await this.contactRepository.find({
+                where: {
+                    contactUserId: userId,
+                },
+            });
+
+            const followerIds = followers.map(f => f.userId);
+            if (followerIds.length === 0) {
+                return await this.findStoriesByUsers([userId]);
+            }
+
+            const mutuals = await this.contactRepository.find({
+                where: {
+                    userId: userId,
+                    contactUserId: In(followerIds),
+                },
+            });
+
+            const mutualIds = [...new Set([...mutuals.map(m => m.contactUserId), userId])];
+            return await this.findStoriesByUsers(mutualIds);
+        } catch (error) {
+            this.logger.error(`Failed to fetch mutual stories feed: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to fetch mutual stories feed');
+        }
+    }
+
+    /**
      * Runs a daily cron job to clean up expired stories and their associated files.
      *
      * @returns A promise that resolves when the cleanup process is complete.
@@ -118,8 +156,23 @@ export class StoryService {
                 return;
             }
         } catch (error) {
-            this.logger.error(`Failed to clear expired stories: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to clear expired stories');
+            this.logger.error(`Failed to fetch expired stories: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to fetch expired stories');
         }
+    }
+
+    private async findStoriesByUsers(userIds: string[]): Promise<StoryResponseDto[]> {
+        const stories = await this.storyRepository.find({
+            where: {
+                userId: In(userIds),
+                expiresAt: MoreThan(new Date()),
+            },
+            relations: { user: true },
+            order: { createdAt: 'DESC' },
+        });
+
+        return plainToInstance(StoryResponseDto, stories, {
+            excludeExtraneousValues: true,
+        });
     }
 }
