@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { StoryResponseDto } from './dto/story-response.dto';
@@ -67,26 +67,30 @@ export class StoryService {
     }
 
     /**
-     * Fetches all stories for a specific user.
+     * Retrieves the active stories for a given user.
      *
      * @param {string} userId - The ID of the user.
-     * @return {Promise<StoryResponseDto[]>} - A promise that resolves to an array of StoryResponseDto objects representing the fetched stories.
+     * @return {Promise<StoryResponseDto[]>} A promise that resolves to an array of active story response DTOs.
      */
-    async showAllStoriesMe(userId: string): Promise<StoryResponseDto[]> {
-        const context = `${StoryService.name}.findAllStories`;
-        this.logger.log(`Fetching all stories for user: ${userId}`, context);
+    async findActiveStoriesByUserId(userId: string): Promise<StoryResponseDto[]> {
+        const context = `${StoryService.name}.findActiveStoriesByUserId`;
 
         try {
             const stories = await this.storyRepository.find({
-                where: { userId: userId },
+                where: {
+                    userId: userId,
+                    expiresAt: MoreThan(new Date()),
+                },
                 relations: ['user'],
+                order: { createdAt: 'DESC' },
             });
+
             return plainToInstance(StoryResponseDto, stories, {
                 excludeExtraneousValues: true,
             });
         } catch (error) {
             this.logger.error(`Failed to fetch stories: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to fetch stories');
+            throw new InternalServerErrorException('Failed to fetch user stories');
         }
     }
 }

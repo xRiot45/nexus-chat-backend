@@ -62,7 +62,7 @@ export class StoryController {
     })
     @Get()
     @UseGuards(JwtAuthGuard)
-    async showAllStoriesMe(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
-        return this.storyService.showAllStoriesMe(user.sub);
+    async findActiveStoriesByUserId(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
+        return this.storyService.findActiveStoriesByUserId(user.sub);
     }
 }
