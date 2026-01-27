@@ -19,6 +19,17 @@ export class StoryService {
         private readonly logger: LoggerService,
     ) {}
 
+    /**
+     * Creates a new story with the given data and files.
+     *
+     * @param {CreateStoryDto} createStoryDto - The data transfer object containing the story's caption.
+     * @param {Object} files - An object containing the uploaded image and video files.
+     * @param {Express.Multer.File[]} files.image - An array of image files.
+     * @param {Express.Multer.File[]} files.video - An array of video files.
+     * @param {string} userId - The ID of the user creating the story.
+     * @return {Promise<StoryResponseDto>} A promise that resolves to the newly created story.
+     * @throws {InternalServerErrorException} If an error occurs while saving the story to the database.
+     */
     async create(
         createStoryDto: CreateStoryDto,
         files: { image?: Express.Multer.File[]; video?: Express.Multer.File[] },
@@ -52,6 +63,30 @@ export class StoryService {
             if (imageUrl) deleteFile(imageUrl);
             if (videoUrl) deleteFile(videoUrl);
             throw new InternalServerErrorException('Gagal menyimpan story ke database');
+        }
+    }
+
+    /**
+     * Fetches all stories for a specific user.
+     *
+     * @param {string} userId - The ID of the user.
+     * @return {Promise<StoryResponseDto[]>} - A promise that resolves to an array of StoryResponseDto objects representing the fetched stories.
+     */
+    async showAllStoriesMe(userId: string): Promise<StoryResponseDto[]> {
+        const context = `${StoryService.name}.findAllStories`;
+        this.logger.log(`Fetching all stories for user: ${userId}`, context);
+
+        try {
+            const stories = await this.storyRepository.find({
+                where: { userId: userId },
+                relations: ['user'],
+            });
+            return plainToInstance(StoryResponseDto, stories, {
+                excludeExtraneousValues: true,
+            });
+        } catch (error) {
+            this.logger.error(`Failed to fetch stories: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to fetch stories');
         }
     }
 }

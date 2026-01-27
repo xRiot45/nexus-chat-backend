@@ -1,4 +1,4 @@
-import { Body, Controller, HttpStatus, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, HttpStatus, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
@@ -51,5 +51,18 @@ export class StoryController {
         },
     ): Promise<StoryResponseDto> {
         return this.storyService.create(createStoryDto, files, user.sub);
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get all my stories',
+        description: 'Get all my stories for the authenticated user.',
+        auth: true,
+        response: StoryResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get()
+    @UseGuards(JwtAuthGuard)
+    async showAllStoriesMe(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
+        return this.storyService.showAllStoriesMe(user.sub);
     }
 }
