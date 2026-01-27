@@ -134,6 +134,44 @@ export class StoryService {
     }
 
     /**
+     * Deletes a story with the given ID from the system.
+     * If the story is found, it is deleted and the associated image and video files are removed.
+     * If the story is not found, the method returns without doing anything.
+     * If an error occurs during the deletion process, an InternalServerErrorException is thrown.
+     * @param {string} id - The ID of the story to be deleted.
+     * @param {string} userId - The ID of the user who owns the story.
+     * @return {Promise<void>} A promise that resolves when the story is successfully deleted.
+     * @throws InternalServerErrorException If an error occurs during the deletion process.
+     */
+    async remove(id: string, userId: string): Promise<void> {
+        const context = `${StoryService.name}.remove`;
+        this.logger.log(`Starting the story deletion process: ${id}`, context);
+
+        try {
+            const story = await this.storyRepository.findOne({
+                where: {
+                    id: id,
+                    userId: userId,
+                },
+            });
+
+            if (!story) {
+                this.logger.log(`Story not found: ${id}`, context);
+                return;
+            }
+
+            if (story.imageUrl) deleteFile(story.imageUrl);
+            if (story.videoUrl) deleteFile(story.videoUrl);
+
+            await this.storyRepository.remove(story);
+            this.logger.log(`Story deleted successfully: ${id}`, context);
+        } catch (error) {
+            this.logger.error(`Failed to delete story: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to delete story');
+        }
+    }
+
+    /**
      * Runs a daily cron job to clean up expired stories and their associated files.
      *
      * @returns A promise that resolves when the cleanup process is complete.

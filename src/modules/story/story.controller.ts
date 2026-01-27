@@ -1,9 +1,22 @@
-import { Body, Controller, Get, HttpStatus, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Post,
+    UploadedFiles,
+    UseGuards,
+    UseInterceptors,
+} from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { BaseResponseDto } from 'src/shared/dto/base-response.dto';
 import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { createStorageConfig, fileFilter } from 'src/shared/utils/file-upload.util';
 import { CreateStoryDto } from './dto/create-story.dto';
@@ -25,6 +38,7 @@ export class StoryController {
         status: HttpStatus.CREATED,
     })
     @Post()
+    @HttpCode(HttpStatus.CREATED)
     @UseGuards(JwtAuthGuard)
     @UseInterceptors(
         FileFieldsInterceptor(
@@ -61,6 +75,7 @@ export class StoryController {
         status: HttpStatus.OK,
     })
     @Get()
+    @HttpCode(HttpStatus.OK)
     @UseGuards(JwtAuthGuard)
     async findActiveStoriesByUserId(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
         return this.storyService.findActiveStoriesByUserId(user.sub);
@@ -74,8 +89,28 @@ export class StoryController {
         status: HttpStatus.OK,
     })
     @Get('feed')
+    @HttpCode(HttpStatus.OK)
     @UseGuards(JwtAuthGuard)
     async getMutualStoriesFeed(@CurrentUser() user: JwtPayload): Promise<StoryResponseDto[]> {
         return this.storyService.getMutualStoriesFeed(user.sub);
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Delete a story',
+        description: 'Delete a story for the authenticated user.',
+        auth: true,
+        status: HttpStatus.OK,
+    })
+    @Delete(':id')
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<BaseResponseDto> {
+        await this.storyService.remove(id, user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Story deleted successfully',
+        };
     }
 }
