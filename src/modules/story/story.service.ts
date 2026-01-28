@@ -162,6 +162,15 @@ export class StoryService {
         }
     }
 
+    /**
+     * Marks a story as seen by the given viewer ID.
+     * If the story is not found or has expired, no action is taken.
+     * If the story has already been marked as seen by the viewer, no action is taken.
+     * @param storyId The ID of the story to mark as seen.
+     * @param viewerId The ID of the viewer marking the story as seen.
+     * @returns A promise that resolves when the story is successfully marked as seen.
+     * @throws InternalServerErrorException If an unexpected error occurs during the marking of the story as seen.
+     */
     async markStoryAsSeen(storyId: string, viewerId: string): Promise<void> {
         const context = `${StoryService.name}.markStoryAsSeen`;
         this.logger.log(`Marking story as seen: ${storyId}`, context);
