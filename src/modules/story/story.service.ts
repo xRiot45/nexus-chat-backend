@@ -2,6 +2,7 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
+import { dateUtil } from 'src/shared/utils/date.util';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
 import { DeepPartial, In, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
@@ -20,15 +21,12 @@ export class StoryService {
     ) {}
 
     /**
-     * Creates a new story with the given data and files.
-     *
-     * @param {CreateStoryDto} createStoryDto - The data transfer object containing the story's caption.
-     * @param {Object} files - An object containing the uploaded image and video files.
-     * @param {Express.Multer.File[]} files.image - An array of image files.
-     * @param {Express.Multer.File[]} files.video - An array of video files.
-     * @param {string} userId - The ID of the user creating the story.
-     * @return {Promise<StoryResponseDto>} A promise that resolves to the newly created story.
-     * @throws {InternalServerErrorException} If an error occurs while saving the story to the database.
+     * Create a new story with the given information.
+     * @param createStoryDto The request data transfer object containing the story information.
+     * @param files The files to be uploaded, containing an image and/or video.
+     * @param userId The ID of the user creating the story.
+     * @returns A promise of the StoryResponseDto containing the newly created story.
+     * @throws InternalServerErrorException If an unexpected error occurs during the creation of the story.
      */
     async create(
         createStoryDto: CreateStoryDto,
@@ -36,7 +34,7 @@ export class StoryService {
         userId: string,
     ): Promise<StoryResponseDto> {
         const context = `${StoryService.name}.create`;
-        this.logger.log(`Memulai proses simpan story untuk user: ${userId}`, context);
+        this.logger.log(`Starting the process of saving the story for the user: ${userId}`, context);
 
         const imageUrl = files.image?.[0] ? `/uploads/stories/${files.image[0].filename}` : null;
         const videoUrl = files.video?.[0] ? `/uploads/stories/${files.video[0].filename}` : null;
@@ -50,6 +48,7 @@ export class StoryService {
             } as DeepPartial<StoryEntity>);
 
             const savedStory = await this.storyRepository.save(newStory);
+
             const result = await this.storyRepository.findOne({
                 where: { id: savedStory.id },
                 relations: ['user'],
@@ -60,6 +59,7 @@ export class StoryService {
             });
         } catch (error) {
             this.logger.error(`Failed to save story: ${(error as Error).message}`, context);
+
             if (imageUrl) deleteFile(imageUrl);
             if (videoUrl) deleteFile(videoUrl);
             throw new InternalServerErrorException('Gagal menyimpan story ke database');
@@ -67,39 +67,28 @@ export class StoryService {
     }
 
     /**
-     * Retrieves the active stories for a given user.
-     *
-     * @param {string} userId - The ID of the user.
-     * @return {Promise<StoryResponseDto[]>} A promise that resolves to an array of active story response DTOs.
+     * Retrieves the active stories of a user with the given ID.
+     * Active stories are stories that have not expired yet.
+     * @param userId The ID of the user to fetch active stories for.
+     * @returns A promise of an array of StoryResponseDto containing the active stories of the user.
+     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the active stories.
      */
     async findActiveStoriesByUserId(userId: string): Promise<StoryResponseDto[]> {
         const context = `${StoryService.name}.findActiveStoriesByUserId`;
-
         try {
-            const stories = await this.storyRepository.find({
-                where: {
-                    userId: userId,
-                    expiresAt: MoreThan(new Date()),
-                },
-                relations: ['user'],
-                order: { createdAt: 'DESC' },
-            });
-
-            return plainToInstance(StoryResponseDto, stories, {
-                excludeExtraneousValues: true,
-            });
+            return await this.findStoriesByUserIds([userId]);
         } catch (error) {
             this.logger.error(`Failed to fetch stories: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to fetch user stories');
+            throw new InternalServerErrorException('Gagal mengambil story user');
         }
     }
 
     /**
-     * Retrieves the mutual stories feed for a given user.
-     * The mutual stories feed consists of stories from the user's followers
-     * and the user itself.
-     * @param {string} userId - The ID of the user.
-     * @return {Promise<StoryResponseDto[]>} A promise that resolves to an array of story response DTOs.
+     * Retrieves the mutual stories feed for the given user ID.
+     * The mutual stories feed consists of stories from users that the given user follows and are also followed by the given user.
+     * @param userId The ID of the user to fetch the mutual stories feed for.
+     * @returns A promise of an array of StoryResponseDto containing the mutual stories of the user.
+     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the mutual stories feed.
      */
     async getMutualStoriesFeed(userId: string): Promise<StoryResponseDto[]> {
         const context = `${StoryService.name}.getMutualStoriesFeed`;
@@ -107,14 +96,13 @@ export class StoryService {
 
         try {
             const followers = await this.contactRepository.find({
-                where: {
-                    contactUserId: userId,
-                },
+                where: { contactUserId: userId },
             });
 
             const followerIds = followers.map(f => f.userId);
+
             if (followerIds.length === 0) {
-                return await this.findStoriesByUsers([userId]);
+                return [];
             }
 
             const mutuals = await this.contactRepository.find({
@@ -124,38 +112,33 @@ export class StoryService {
                 },
             });
 
-            const mutualIds = [...new Set([...mutuals.map(m => m.contactUserId), userId])];
-            return await this.findStoriesByUsers(mutualIds);
+            const mutualIds = mutuals.map(m => m.contactUserId);
+
+            if (mutualIds.length === 0) {
+                return [];
+            }
+
+            return await this.findStoriesByUserIds(mutualIds);
         } catch (error) {
             this.logger.error(`Failed to fetch mutual stories feed: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to fetch mutual stories feed');
+            throw new InternalServerErrorException('Gagal mengambil feed story mutual');
         }
     }
 
     /**
-     * Deletes a story with the given ID from the system.
-     * If the story is found, it is deleted and the associated image and video files are removed.
-     * If the story is not found, the method returns without doing anything.
-     * If an error occurs during the deletion process, an InternalServerErrorException is thrown.
-     * @param {string} id - The ID of the story to be deleted.
-     * @param {string} userId - The ID of the user who owns the story.
-     * @return {Promise<void>} A promise that resolves when the story is successfully deleted.
-     * @throws InternalServerErrorException If an error occurs during the deletion process.
+     * Menghapus story.
      */
     async remove(id: string, userId: string): Promise<void> {
         const context = `${StoryService.name}.remove`;
-        this.logger.log(`Starting the story deletion process: ${id}`, context);
+        this.logger.log(`Starting story deletion: ${id}`, context);
 
         try {
             const story = await this.storyRepository.findOne({
-                where: {
-                    id: id,
-                    userId: userId,
-                },
+                where: { id, userId },
             });
 
             if (!story) {
-                this.logger.log(`Story not found: ${id}`, context);
+                this.logger.log(`Story not found or unauthorized: ${id}`, context);
                 return;
             }
 
@@ -166,15 +149,17 @@ export class StoryService {
             this.logger.log(`Story deleted successfully: ${id}`, context);
         } catch (error) {
             this.logger.error(`Failed to delete story: ${(error as Error).message}`, context);
-            throw new InternalServerErrorException('Failed to delete story');
+            throw new InternalServerErrorException('Gagal menghapus story');
         }
     }
 
-    private async findStoriesByUsers(userIds: string[]): Promise<StoryResponseDto[]> {
+    private async findStoriesByUserIds(userIds: string[]): Promise<StoryResponseDto[]> {
+        const now = dateUtil().tz('Asia/Jakarta').toDate();
+
         const stories = await this.storyRepository.find({
             where: {
                 userId: In(userIds),
-                expiresAt: MoreThan(new Date()),
+                expiresAt: MoreThan(now),
             },
             relations: { user: true },
             order: { createdAt: 'DESC' },

@@ -1,6 +1,13 @@
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { dateUtil } from 'src/shared/utils/date.util';
+import { BeforeInsert, Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Entity('stories')
 export class StoryEntity extends BaseEntity {
@@ -13,11 +20,7 @@ export class StoryEntity extends BaseEntity {
     @Column({ type: 'text', nullable: true })
     caption: string;
 
-    @Column({
-        name: 'expiresAt',
-        type: 'timestamp',
-        default: () => "NOW() + INTERVAL '24 hours'",
-    })
+    @Column({ name: 'expiresAt', type: 'datetime' })
     expiresAt: Date;
 
     // --- Relations ---
@@ -28,4 +31,10 @@ export class StoryEntity extends BaseEntity {
     @ManyToOne(() => UserEntity, user => user.stories, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'userId' })
     user: UserEntity;
+
+    @BeforeInsert()
+    setExpirationDate(): void {
+        const expiration = dateUtil().tz('Asia/Jakarta').add(1, 'day').format('YYYY-MM-DD HH:mm:ss');
+        this.expiresAt = expiration as unknown as Date;
+    }
 }
