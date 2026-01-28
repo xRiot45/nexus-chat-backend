@@ -21,6 +21,7 @@ import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { createStorageConfig, fileFilter } from 'src/shared/utils/file-upload.util';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { StoryResponseDto } from './dto/story-response.dto';
+import { StoryViewerResponseDto } from './dto/story-viewer-response.dto';
 import { StoryService } from './story.service';
 
 @ApiTags('Story')
@@ -133,6 +134,30 @@ export class StoryController {
             statusCode: HttpStatus.OK,
             timestamp: new Date(),
             message: 'Story marked as seen successfully',
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get story viewers',
+        description: 'Get story viewers for the authenticated user.',
+        auth: true,
+        response: StoryViewerResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get(':storyId/viewers')
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    async getStoryViewers(
+        @Param('storyId') storyId: string,
+        @CurrentUser() user: JwtPayload,
+    ): Promise<BaseResponseDto<StoryViewerResponseDto[]>> {
+        const result = await this.storyService.getStoryViewers(storyId, user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Story viewers fetched successfully',
+            data: result,
         };
     }
 }
