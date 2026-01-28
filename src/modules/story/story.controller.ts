@@ -113,4 +113,26 @@ export class StoryController {
             message: 'Story deleted successfully',
         };
     }
+
+    @ApiDocGenericResponse({
+        summary: 'Mark a story as seen',
+        description: 'Mark a story as seen for the authenticated user.',
+        auth: true,
+        status: HttpStatus.OK,
+    })
+    @Post(':storyId/seen')
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(JwtAuthGuard)
+    async markStoryAsSeen(
+        @Param('storyId') storyId: string,
+        @CurrentUser() user: JwtPayload,
+    ): Promise<BaseResponseDto> {
+        await this.storyService.markStoryAsSeen(storyId, user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            timestamp: new Date(),
+            message: 'Story marked as seen successfully',
+        };
+    }
 }

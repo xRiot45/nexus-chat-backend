@@ -8,6 +8,7 @@ import { DeepPartial, In, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { StoryResponseDto } from './dto/story-response.dto';
+import { StoryViewEntity } from './entities/story-view.entity';
 import { StoryEntity } from './entities/story.entity';
 
 @Injectable()
@@ -15,6 +16,8 @@ export class StoryService {
     constructor(
         @InjectRepository(StoryEntity)
         private readonly storyRepository: Repository<StoryEntity>,
+        @InjectRepository(StoryViewEntity)
+        private readonly storyViewRepository: Repository<StoryViewEntity>,
         @InjectRepository(ContactEntity)
         private readonly contactRepository: Repository<ContactEntity>,
         private readonly logger: LoggerService,
@@ -126,7 +129,13 @@ export class StoryService {
     }
 
     /**
-     * Menghapus story.
+     * Deletes a story associated with the given user ID and story ID.
+     * If the story is not found or unauthorized, no action is taken.
+     * If the story has an image or video associated with it, the image or video is deleted from the file system before the story is deleted.
+     * @param id The ID of the story to be deleted.
+     * @param userId The ID of the user to delete the story for.
+     * @returns A promise that resolves when the story is successfully deleted.
+     * @throws InternalServerErrorException If an unexpected error occurs during the deletion of the story.
      */
     async remove(id: string, userId: string): Promise<void> {
         const context = `${StoryService.name}.remove`;
@@ -150,6 +159,40 @@ export class StoryService {
         } catch (error) {
             this.logger.error(`Failed to delete story: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Gagal menghapus story');
+        }
+    }
+
+    async markStoryAsSeen(storyId: string, viewerId: string): Promise<void> {
+        const context = `${StoryService.name}.markStoryAsSeen`;
+        this.logger.log(`Marking story as seen: ${storyId}`, context);
+
+        try {
+            const story = await this.storyRepository.findOne({
+                where: {
+                    id: storyId,
+                    expiresAt: MoreThan(dateUtil().tz('Asia/Jakarta').toDate()),
+                },
+            });
+
+            if (!story) {
+                this.logger.log(`Story not found or expired: ${storyId}`, context);
+                return;
+            }
+
+            if (story?.userId === viewerId) return;
+
+            await this.storyViewRepository.upsert(
+                {
+                    storyId: storyId,
+                    viewerId: viewerId,
+                },
+                ['storyId', 'viewerId'],
+            );
+
+            this.logger.log(`Story marked as seen: ${storyId}`, context);
+        } catch (error) {
+            this.logger.error(`Failed to mark story as seen: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Gagal mengubah story');
         }
     }
 

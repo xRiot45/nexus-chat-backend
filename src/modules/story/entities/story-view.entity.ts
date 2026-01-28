@@ -1,9 +1,10 @@
 import { UserEntity } from 'src/modules/users/entities/user.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, Unique } from 'typeorm';
 import { StoryEntity } from './story.entity';
 
 @Entity('story_views')
+@Unique(['storyId', 'viewerId'])
 export class StoryViewEntity extends BaseEntity {
     @Column()
     storyId: string;
