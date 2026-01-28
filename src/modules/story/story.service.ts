@@ -36,8 +36,10 @@ export class StoryService {
         const context = `${StoryService.name}.create`;
         this.logger.log(`Starting the process of saving the story for the user: ${userId}`, context);
 
-        const imageUrl = files.image?.[0] ? `/uploads/stories/${files.image[0].filename}` : null;
-        const videoUrl = files.video?.[0] ? `/uploads/stories/${files.video[0].filename}` : null;
+        const imageFile = files.image?.[0];
+        const videoFile = files.video?.[0];
+        const imageUrl = imageFile ? `/uploads/stories/${imageFile.filename}` : null;
+        const videoUrl = videoFile ? `/uploads/stories/${videoFile.filename}` : null;
 
         try {
             const newStory = this.storyRepository.create({
