@@ -1,9 +1,9 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { dateUtil } from 'src/shared/utils/date.util';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
+import { mapToDto } from 'src/shared/utils/transformer.util';
 import { DeepPartial, In, MoreThan, Repository } from 'typeorm';
 import { ContactEntity } from '../contacts/entities/contact.entity';
 import { CreateStoryDto } from './dto/create-story.dto';
@@ -54,9 +54,7 @@ export class StoryService {
                 relations: ['user'],
             });
 
-            return plainToInstance(StoryResponseDto, result, {
-                excludeExtraneousValues: true,
-            });
+            return mapToDto(StoryResponseDto, result);
         } catch (error) {
             this.logger.error(`Failed to save story: ${(error as Error).message}`, context);
 
@@ -165,8 +163,6 @@ export class StoryService {
             order: { createdAt: 'DESC' },
         });
 
-        return plainToInstance(StoryResponseDto, stories, {
-            excludeExtraneousValues: true,
-        });
+        return mapToDto(StoryResponseDto, stories);
     }
 }
