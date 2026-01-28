@@ -8,10 +8,11 @@ import { UserEntity } from '../users/entities/user.entity';
 import { StoryEntity } from './entities/story.entity';
 import { StoryController } from './story.controller';
 import { StoryService } from './story.service';
+import { StoryTask } from './tasks/story.task';
 
 @Module({
     imports: [TypeOrmModule.forFeature([StoryEntity, ContactEntity, UserEntity])],
     controllers: [StoryController],
-    providers: [StoryService, LoggerService, JwtService, TokenService],
+    providers: [StoryService, StoryTask, LoggerService, JwtService, TokenService],
 })
 export class StoryModule {}
