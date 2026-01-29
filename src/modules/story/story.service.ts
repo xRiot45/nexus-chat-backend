@@ -101,6 +101,7 @@ export class StoryService {
         try {
             const followers = await this.contactRepository.find({
                 where: { contactUserId: userId },
+                select: ['userId'],
             });
 
             const followerIds = followers.map(f => f.userId);
@@ -114,15 +115,33 @@ export class StoryService {
                     userId: userId,
                     contactUserId: In(followerIds),
                 },
+                select: ['contactUserId', 'alias'],
             });
 
-            const mutualIds = mutuals.map(m => m.contactUserId);
-
-            if (mutualIds.length === 0) {
+            if (mutuals.length === 0) {
                 return [];
             }
 
-            return await this.findStoriesByUserIds(mutualIds);
+            const aliasMap: Record<string, string> = {};
+            const mutualIds: string[] = [];
+
+            mutuals.forEach(m => {
+                mutualIds.push(m.contactUserId);
+                if (m.alias) {
+                    aliasMap[m.contactUserId] = m.alias;
+                }
+            });
+
+            const stories = await this.findStoriesByUserIds(mutualIds);
+
+            stories.forEach(story => {
+                const userAlias = aliasMap[story.user.id];
+                if (userAlias) {
+                    story.user.fullName = userAlias;
+                }
+            });
+
+            return stories;
         } catch (error) {
             this.logger.error(`Failed to fetch mutual stories feed: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Gagal mengambil feed story mutual');
@@ -207,26 +226,21 @@ export class StoryService {
     }
 
     /**
-     * Retrieves the list of story viewers for the given story ID and user ID.
-     * The list of story viewers is sorted in descending order of when the story was seen.
-     * If the story is not found or unauthorized, a ForbiddenException is thrown.
-     * If an unexpected error occurs during the retrieval of the story viewers, an InternalServerErrorException is thrown.
-     * @param storyId The ID of the story to retrieve the list of viewers for.
-     * @param userId The ID of the user to retrieve the list of viewers for.
-     * @returns A promise of an array of StoryViewerResponseDto containing the list of story viewers.
-     * @throws ForbiddenException If the story is not found or unauthorized.
-     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the story viewers.
+     * Retrieves the viewers of a story for a specific owner.
+     *
+     * @param {string} storyId - The ID of the story.
+     * @param {string} userId - The ID of the owner of the story.
+     * @return {Promise<StoryViewerResponseDto[]>} - A promise that resolves to an array of StoryViewerResponseDto objects representing the viewers of the story.
+     * @throws {ForbiddenException} - If the owner does not have access to the story viewer data.
+     * @throws {InternalServerErrorException} - If an unexpected error occurs during the retrieval of the story viewers.
      */
     async getStoryViewers(storyId: string, userId: string): Promise<StoryViewerResponseDto[]> {
         const context = `${StoryService.name}.getStoryViewers`;
-        this.logger.log(`Get story viewers for userId : ${userId}`, context);
+        this.logger.log(`Get story viewers for storyId: ${storyId} by owner: ${userId}`, context);
 
         try {
             const story = await this.storyRepository.findOne({
-                where: {
-                    id: storyId,
-                    userId: userId,
-                },
+                where: { id: storyId, userId: userId },
             });
 
             if (!story) {
@@ -240,15 +254,39 @@ export class StoryService {
                 order: { createdAt: 'DESC' },
             });
 
-            const rawData = views.map(view => ({
-                seenAt: view.createdAt,
-                user: view.viewer,
-            }));
+            if (views.length === 0) {
+                this.logger.log(`No viewers found for storyId: ${storyId}`, context);
+                return [];
+            }
+
+            const viewerIds = views.map(v => v.viewer.id);
+            const contacts = await this.contactRepository.find({
+                where: {
+                    userId: userId,
+                    contactUserId: In(viewerIds),
+                },
+                select: ['contactUserId', 'alias'],
+            });
+
+            const aliasMap: Record<string, string> = {};
+            contacts.forEach(c => {
+                aliasMap[c.contactUserId] = c.alias;
+            });
+
+            const rawData = views.map(view => {
+                const alias = aliasMap[view.viewer.id];
+                return {
+                    seenAt: view.createdAt,
+                    user: {
+                        ...view.viewer,
+                        fullName: alias || view.viewer.fullName,
+                    },
+                };
+            });
 
             return mapToDto(StoryViewerResponseDto, rawData);
         } catch (error) {
             if (error instanceof ForbiddenException) throw error;
-
             this.logger.error(`Failed to get story viewers: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Gagal mengambil data viewer story');
         }
