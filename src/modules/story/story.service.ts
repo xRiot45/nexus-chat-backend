@@ -301,7 +301,7 @@ export class StoryService {
                 expiresAt: MoreThan(now),
             },
             relations: { user: true },
-            order: { createdAt: 'DESC' },
+            order: { createdAt: 'ASC' },
         });
 
         return mapToDto(StoryResponseDto, stories);
