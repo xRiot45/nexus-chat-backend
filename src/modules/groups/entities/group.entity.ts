@@ -15,7 +15,7 @@ export class GroupEntity extends BaseEntity {
     @Column({
         type: 'varchar',
         length: 255,
-        nullable: false,
+        nullable: true,
     })
     description: string;
 
@@ -23,7 +23,7 @@ export class GroupEntity extends BaseEntity {
         type: 'text',
         nullable: true,
     })
-    icon: string;
+    iconUrl: string | null;
 
     @Column({ name: 'ownerId' })
     ownerId: string;

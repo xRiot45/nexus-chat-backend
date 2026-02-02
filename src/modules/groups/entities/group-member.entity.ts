@@ -27,6 +27,10 @@ export class GroupMemberEntity extends BaseEntity {
     @JoinColumn({ name: 'userId' })
     user: UserEntity;
 
-    @Column({ name: 'joinedAt' })
+    @Column({
+        name: 'joinedAt',
+        type: 'datetime',
+        default: () => 'CURRENT_TIMESTAMP',
+    })
     joinedAt: Date;
 }
