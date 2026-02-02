@@ -2,6 +2,8 @@ import { UserStatus } from 'src/common/enums/user-status.enum';
 import { ConversationEntity } from 'src/modules/chat/entities/conversation.entity';
 import { MessageEntity } from 'src/modules/chat/entities/message.entity';
 import { ContactEntity } from 'src/modules/contacts/entities/contact.entity';
+import { GroupMemberEntity } from 'src/modules/groups/entities/group-member.entity';
+import { GroupEntity } from 'src/modules/groups/entities/group.entity';
 import { StoryEntity } from 'src/modules/story/entities/story.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
 import { Column, Entity, OneToMany } from 'typeorm';
@@ -81,4 +83,11 @@ export class UserEntity extends BaseEntity {
     // TODO --- Relasi Story Feature ---
     @OneToMany(() => StoryEntity, story => story.user)
     stories: StoryEntity[];
+
+    // TODO --- Relasi Group Feature ---
+    @OneToMany(() => GroupEntity, group => group.owner)
+    groups: GroupEntity[];
+
+    @OneToMany(() => GroupMemberEntity, member => member.user)
+    groupMemberships: GroupMemberEntity[];
 }
