@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
-import { UserShortResponseDto } from './story-response.dto';
+import { UserShortResponseDto } from 'src/shared/dto/user-short-response.dto';
 
 export class StoryViewerResponseDto {
     @ApiProperty({
