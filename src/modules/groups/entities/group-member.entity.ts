@@ -1,10 +1,11 @@
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, Unique } from 'typeorm';
 import { GroupEntity } from './group.entity';
 
 @Entity('group_members')
+@Unique(['groupId', 'userId'])
 export class GroupMemberEntity extends BaseEntity {
     @Column({ name: 'groupId' })
     groupId: string;
