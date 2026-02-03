@@ -1,12 +1,13 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
 import { mapToDto } from 'src/shared/utils/transformer.util';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
+import { InviteMemberDto, InviteMemberResponseDto } from './dto/invite-member.dto';
 import { GroupMemberEntity } from './entities/group-member.entity';
 import { GroupEntity } from './entities/group.entity';
 
@@ -69,5 +70,57 @@ export class GroupsService {
                 throw new InternalServerErrorException('Failed to create group, please try again later.');
             }
         });
+    }
+
+    /**
+     * Invites members to a group.
+     * @param inviteMemberDto The request data transfer object containing the group ID and member IDs to be invited.
+     * @returns A promise of the InviteMemberResponseDto containing the number of members successfully invited and the number of members that were already members of the group.
+     * @throws ConflictException If the all specified members are already in the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the invitation of members.
+     */
+    async inviteMembers(inviteMemberDto: InviteMemberDto): Promise<InviteMemberResponseDto> {
+        const context = `${GroupsService.name}.inviteMembers`;
+        const { groupId, memberIds } = inviteMemberDto;
+        this.logger.log(`Starting invite members process for group ID: ${groupId}`, context);
+
+        try {
+            const existingMembers = await this.groupMemberRepository.find({
+                where: {
+                    groupId: groupId,
+                    userId: In(memberIds),
+                },
+                select: ['userId'],
+            });
+
+            const existingUserIds = existingMembers.map(member => member.userId);
+            const newUserIds = memberIds.filter(id => !existingUserIds.includes(id));
+
+            if (newUserIds.length === 0) {
+                this.logger.log(`All specified members are already in the group ID: ${groupId}`, context);
+                throw new ConflictException('All specified members are already in the group.');
+            }
+
+            const newGroupMembers = newUserIds.map(userId => {
+                return this.groupMemberRepository.create({
+                    groupId: groupId,
+                    userId: userId,
+                    role: GroupRole.MEMBER,
+                });
+            });
+
+            await this.groupMemberRepository.save(newGroupMembers);
+            this.logger.log(`Successfully invited ${newUserIds.length} members to group ID: ${groupId}`, context);
+
+            return mapToDto(InviteMemberResponseDto, {
+                count: newUserIds.length,
+                skippedCount: existingUserIds.length,
+            });
+        } catch (error) {
+            if (error instanceof ConflictException) throw error;
+
+            this.logger.error(`Failed to invite members: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to invite members, please try again later.');
+        }
     }
 }
