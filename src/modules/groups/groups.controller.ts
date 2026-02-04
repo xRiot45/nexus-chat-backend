@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Delete,
     HttpCode,
     HttpStatus,
     Param,
@@ -116,6 +117,29 @@ export class GroupsController {
             message: 'Group updated successfully',
             timestamp: new Date(),
             data: result,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Kick member',
+        description: 'Kick a member from a group (Requires Owner or Admin role)',
+        auth: true,
+        response: BaseResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Delete(':groupId/members/:memberId')
+    @UseGuards(JwtAuthGuard)
+    async kickMember(
+        @Param('groupId') groupId: string,
+        @Param('memberId') memberId: string,
+        @CurrentUser() user: JwtPayload,
+    ): Promise<BaseResponseDto> {
+        await this.groupsService.kickMember(memberId, user.sub, groupId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Member has been successfully removed from the group',
+            timestamp: new Date(),
         };
     }
 }

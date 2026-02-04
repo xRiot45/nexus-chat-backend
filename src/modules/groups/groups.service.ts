@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     ConflictException,
     ForbiddenException,
     HttpException,
@@ -185,6 +186,80 @@ export class GroupsService {
             if (error instanceof HttpException) throw error;
 
             throw new InternalServerErrorException('Failed to update group');
+        }
+    }
+
+    /**
+     * Kicks a member from a group.
+     * @param memberId The ID of the member to be kicked.
+     * @param actorId The ID of the user that is kicking the member.
+     * @param groupId The ID of the group from which the member will be kicked.
+     * @throws BadRequestException If the actor tries to kick themselves.
+     * @throws ForbiddenException If the actor does not have sufficient privileges to kick the member.
+     * @throws NotFoundException If the target user is not a member of the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the kick process.
+     */
+    async kickMember(memberId: string, actorId: string, groupId: string): Promise<void> {
+        const context = `${GroupsService.name}.kickMember`;
+        this.logger.log(`Attempting to kick member ${memberId} from group ${groupId} by actor ${actorId}`, context);
+
+        if (memberId === actorId) {
+            this.logger.warn(`Kick failed: Actor ${actorId} tried to kick themselves`, context);
+            throw new BadRequestException('You cannot kick yourself');
+        }
+
+        try {
+            const [actor, target] = await Promise.all([
+                this.groupMemberRepository.findOne({ where: { groupId, userId: actorId } }),
+                this.groupMemberRepository.findOne({ where: { groupId, userId: memberId } }),
+            ]);
+
+            if (!actor) {
+                this.logger.error(`Kick failed: Actor ${actorId} is not a member of group ${groupId}`, context);
+                throw new ForbiddenException('You are not a member of this group');
+            }
+
+            if (!target) {
+                this.logger.warn(`Kick failed: Target ${memberId} is not found in group ${groupId}`, context);
+                throw new NotFoundException('Target user is not a member of this group');
+            }
+
+            this.logger.debug(`Roles Check - Actor: ${actor.role}, Target: ${target.role}`, context);
+
+            const isActorOwner = actor.role === GroupRole.OWNER;
+            const isActorAdmin = actor.role === GroupRole.ADMIN;
+            const isTargetOwner = target.role === GroupRole.OWNER;
+            const isTargetAdmin = target.role === GroupRole.ADMIN;
+
+            if (!isActorOwner && !isActorAdmin) {
+                this.logger.warn(
+                    `Permission Denied: User ${actorId} (Role: ${actor.role}) attempted to kick without sufficient privileges`,
+                    context,
+                );
+                throw new ForbiddenException('Only owners or admins can kick members');
+            }
+
+            if (isActorAdmin && !isActorOwner) {
+                if (isTargetOwner || isTargetAdmin) {
+                    this.logger.warn(
+                        `Hierarchy Violation: Admin ${actorId} tried to kick a ${target.role} (${memberId})`,
+                        context,
+                    );
+                    throw new ForbiddenException('Admins cannot kick owners or other admins');
+                }
+            }
+
+            await this.groupMemberRepository.remove(target);
+            this.logger.log(`Success: Member ${memberId} removed from group ${groupId} by ${actorId}`, context);
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+
+            this.logger.error(
+                `Critical Error during kickMember: ${(error as Error).message}`,
+                (error as Error).stack,
+                context,
+            );
+            throw new InternalServerErrorException('An unexpected error occurred');
         }
     }
 }

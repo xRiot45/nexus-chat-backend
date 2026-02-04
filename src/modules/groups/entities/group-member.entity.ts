@@ -18,7 +18,7 @@ export class GroupMemberEntity extends BaseEntity {
         enum: GroupRole,
         default: GroupRole.MEMBER,
     })
-    role: string;
+    role: GroupRole;
 
     @ManyToOne(() => GroupEntity, group => group.members, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'groupId' })
