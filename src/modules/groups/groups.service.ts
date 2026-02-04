@@ -262,4 +262,39 @@ export class GroupsService {
             throw new InternalServerErrorException('An unexpected error occurred');
         }
     }
+
+    /**
+     * Deletes a group with the given ID.
+     * If the group is not found, a NotFoundException is thrown.
+     * If an unexpected error occurs during the deletion of the group, an InternalServerErrorException is thrown.
+     * @param groupId The ID of the group to be deleted.
+     * @returns A promise that resolves when the group is successfully deleted.
+     * @throws NotFoundException If the group with the given ID is not found.
+     * @throws InternalServerErrorException If an unexpected error occurs during the deletion of the group.
+     */
+    async remove(groupId: string): Promise<void> {
+        const context = `${GroupsService.name}.remove`;
+        this.logger.log(`Removing group with ID: ${groupId}`, context);
+
+        try {
+            const group = await this.groupRepository.findOne({ where: { id: groupId } });
+
+            if (!group) {
+                this.logger.warn(`Group with ID: ${groupId} not found`, context);
+                throw new NotFoundException(`Group with ID ${groupId} not found`);
+            }
+
+            if (group.iconUrl) {
+                deleteFile(group.iconUrl);
+            }
+
+            await this.groupRepository.remove(group);
+            this.logger.log(`Group with ID: ${groupId} successfully removed`, context);
+        } catch (error) {
+            this.logger.error(`Failed to remove group: ${(error as Error).message}`, context);
+            if (error instanceof HttpException) throw error;
+
+            throw new InternalServerErrorException('Failed to remove group, please try again later.');
+        }
+    }
 }

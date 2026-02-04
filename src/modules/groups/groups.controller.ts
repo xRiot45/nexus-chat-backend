@@ -142,4 +142,23 @@ export class GroupsController {
             timestamp: new Date(),
         };
     }
+
+    @ApiDocGenericResponse({
+        summary: 'Delete a group',
+        description: 'Delete an existing group by its ID',
+        auth: true,
+        response: BaseResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Delete(':groupId')
+    @UseGuards(JwtAuthGuard)
+    async delete(@Param('groupId') groupId: string): Promise<BaseResponseDto> {
+        await this.groupsService.remove(groupId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Group has been successfully removed',
+            timestamp: new Date(),
+        };
+    }
 }
