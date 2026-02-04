@@ -101,7 +101,6 @@ export class GroupsService {
                 },
                 select: ['userId'],
             });
-
             const existingUserIds = existingMembers.map(member => member.userId);
             const newUserIds = memberIds.filter(id => !existingUserIds.includes(id));
 
@@ -295,6 +294,64 @@ export class GroupsService {
             if (error instanceof HttpException) throw error;
 
             throw new InternalServerErrorException('Failed to remove group, please try again later.');
+        }
+    }
+
+    /**
+     * Removes a user from a group.
+     * If the user is not a member of the group, a NotFoundException is thrown.
+     * If the user is the owner of the group and there are other members, a BadRequestException is thrown.
+     * If an unexpected error occurs during the removal of the user from the group, an InternalServerErrorException is thrown.
+     * @param userId The ID of the user to be removed from the group.
+     * @param groupId The ID of the group from which the user will be removed.
+     * @returns A promise that resolves when the user is successfully removed from the group.
+     * @throws NotFoundException If the user with the given ID is not a member of the group.
+     * @throws BadRequestException If the user is an owner and there are other members in the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the removal of the user from the group.
+     */
+    async leaveGroup(userId: string, groupId: string): Promise<void> {
+        const context = `${GroupsService.name}.leaveGroup`;
+        this.logger.log(`User ${userId} attempting to leave group ${groupId}`, context);
+
+        try {
+            const member = await this.groupMemberRepository.findOne({
+                where: {
+                    groupId,
+                    userId,
+                },
+            });
+
+            if (!member) {
+                this.logger.warn(`Leave group failed: User ${userId} is not a member of group ${groupId}`, context);
+                throw new NotFoundException('You are not a member of this group');
+            }
+
+            if (member.role === GroupRole.OWNER) {
+                const memberCount = await this.groupMemberRepository.count({ where: { groupId } });
+                if (memberCount > 1) {
+                    this.logger.warn(
+                        `Owner ${userId} tried to leave group ${groupId} without transferring ownership`,
+                        context,
+                    );
+                    throw new BadRequestException(
+                        'As an owner, you must transfer ownership to another member before leaving or delete the group.',
+                    );
+                } else {
+                    this.logger.log(`Owner ${userId} is the last member. Deleting group ${groupId}`, context);
+                    const group = await this.groupRepository.findOne({
+                        where: { id: groupId },
+                    });
+                    if (group) await this.groupRepository.remove(group);
+                    return;
+                }
+            }
+
+            await this.groupMemberRepository.remove(member);
+            this.logger.log(`User ${userId} successfully left group ${groupId}`, context);
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+            this.logger.error(`Failed to leave group: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to leave group');
         }
     }
 }

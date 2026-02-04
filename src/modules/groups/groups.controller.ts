@@ -104,6 +104,7 @@ export class GroupsController {
             limits: { fileSize: 2 * 1024 * 1024 },
         }),
     )
+    @HttpCode(HttpStatus.OK)
     async update(
         @Param('groupId') groupId: string,
         @CurrentUser() user: JwtPayload,
@@ -129,6 +130,7 @@ export class GroupsController {
     })
     @Delete(':groupId/members/:memberId')
     @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
     async kickMember(
         @Param('groupId') groupId: string,
         @Param('memberId') memberId: string,
@@ -152,12 +154,33 @@ export class GroupsController {
     })
     @Delete(':groupId')
     @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
     async delete(@Param('groupId') groupId: string): Promise<BaseResponseDto> {
         await this.groupsService.remove(groupId);
         return {
             success: true,
             statusCode: HttpStatus.OK,
             message: 'Group has been successfully removed',
+            timestamp: new Date(),
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Leave group',
+        description: 'Current user leaves the specified group',
+        auth: true,
+        response: BaseResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Post(':groupId/leave')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async leaveGroup(@Param('groupId') groupId: string, @CurrentUser() user: JwtPayload): Promise<BaseResponseDto> {
+        await this.groupsService.leaveGroup(user.sub, groupId);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Successfully left the group',
             timestamp: new Date(),
         };
     }
