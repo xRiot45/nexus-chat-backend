@@ -1,4 +1,15 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    HttpCode,
+    HttpStatus,
+    Param,
+    Patch,
+    Post,
+    UploadedFile,
+    UseGuards,
+    UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
@@ -10,6 +21,7 @@ import { BaseResponseDto } from './../../shared/dto/base-response.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { InviteMemberDto, InviteMemberResponseDto } from './dto/invite-member.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupsService } from './groups.service';
 
 @ApiTags('Groups')
@@ -68,6 +80,40 @@ export class GroupsController {
             success: true,
             statusCode: HttpStatus.CREATED,
             message: 'Members invited successfully',
+            timestamp: new Date(),
+            data: result,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Update group details',
+        description: 'Update the details of an existing group',
+        auth: true,
+        isMultipart: true,
+        body: UpdateGroupDto,
+        response: GroupResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Patch(':groupId')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(
+        FileInterceptor('icon', {
+            storage: createStorageConfig('icons'),
+            fileFilter: fileFilter,
+            limits: { fileSize: 2 * 1024 * 1024 },
+        }),
+    )
+    async update(
+        @Param('groupId') groupId: string,
+        @CurrentUser() user: JwtPayload,
+        @Body() updateGroupDto: UpdateGroupDto,
+        @UploadedFile() icon: Express.Multer.File,
+    ): Promise<BaseResponseDto<GroupResponseDto>> {
+        const result = await this.groupsService.update(groupId, user?.sub, updateGroupDto, icon);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Group updated successfully',
             timestamp: new Date(),
             data: result,
         };

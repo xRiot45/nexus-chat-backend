@@ -1,4 +1,11 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+    ConflictException,
+    ForbiddenException,
+    HttpException,
+    Injectable,
+    InternalServerErrorException,
+    NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
@@ -8,6 +15,7 @@ import { In, Repository } from 'typeorm';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { InviteMemberDto, InviteMemberResponseDto } from './dto/invite-member.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupMemberEntity } from './entities/group-member.entity';
 import { GroupEntity } from './entities/group.entity';
 
@@ -121,6 +129,51 @@ export class GroupsService {
 
             this.logger.error(`Failed to invite members: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Failed to invite members, please try again later.');
+        }
+    }
+
+    async update(
+        groupId: string,
+        userId: string, // Tambahkan userId untuk cek ownership
+        updateGroupDto: UpdateGroupDto,
+        iconFile?: Express.Multer.File,
+    ): Promise<GroupResponseDto> {
+        const context = `${GroupsService.name}.update`;
+
+        try {
+            const group = await this.groupRepository.findOne({
+                where: { id: groupId },
+                relations: ['owner'],
+            });
+
+            if (!group) {
+                throw new NotFoundException(`Group with ID ${groupId} not found`);
+            }
+
+            if (group.owner.id !== userId) {
+                throw new ForbiddenException('You do not have permission to update this group');
+            }
+
+            if (updateGroupDto.name) group.name = updateGroupDto.name;
+            if (updateGroupDto.description) group.description = updateGroupDto.description;
+
+            if (iconFile) {
+                const newIconUrl = `/uploads/icons/${iconFile.filename}`;
+                if (group.iconUrl) {
+                    deleteFile(group.iconUrl);
+                }
+                group.iconUrl = newIconUrl;
+            }
+
+            const updatedGroup = await this.groupRepository.save(group);
+            return mapToDto(GroupResponseDto, updatedGroup);
+        } catch (error) {
+            if (iconFile) deleteFile(`/uploads/icons/${iconFile.filename}`);
+
+            this.logger.error(`Failed to update group: ${(error as Error).message}`, context);
+            if (error instanceof HttpException) throw error;
+
+            throw new InternalServerErrorException('Failed to update group');
         }
     }
 }
