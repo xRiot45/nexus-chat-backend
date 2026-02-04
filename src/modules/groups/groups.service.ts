@@ -132,6 +132,17 @@ export class GroupsService {
         }
     }
 
+    /**
+     * Updates a group with the given ID.
+     * @param groupId The ID of the group to be updated.
+     * @param userId The ID of the user that owns the group.
+     * @param updateGroupDto The request data transfer object containing the updated group information.
+     * @param iconFile The file containing the group's new icon.
+     * @returns A promise of the GroupResponseDto containing the updated group information.
+     * @throws NotFoundException If the group with the given ID is not found.
+     * @throws ForbiddenException If the user with the given ID does not own the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the update of the group.
+     */
     async update(
         groupId: string,
         userId: string, // Tambahkan userId untuk cek ownership
