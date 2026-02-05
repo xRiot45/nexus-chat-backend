@@ -426,4 +426,50 @@ export class GroupsService {
             throw new InternalServerErrorException('Failed to change member role, please try again later.');
         }
     }
+
+    /**
+     * Retrieves the simplified group list for a given user ID.
+     *
+     * @param {string} userId - The ID of the user.
+     * @return {Promise<GroupResponseDto[]>} - A promise that resolves to an array of GroupResponseDto objects representing the groups the user is a member of.
+     */
+    async getMyGroups(userId: string): Promise<GroupResponseDto[]> {
+        const context = `${GroupsService.name}.getMyGroups`;
+        this.logger.log(`Fetching simplified group list for user ID: ${userId}`, context);
+
+        try {
+            const groupMemberships = await this.groupMemberRepository.find({
+                where: {
+                    userId: userId,
+                },
+                relations: ['group'],
+                order: {
+                    group: {
+                        createdAt: 'DESC',
+                    },
+                },
+            });
+
+            if (groupMemberships.length === 0) {
+                this.logger.log(`User ${userId} is not a member of any group`, context);
+                return [];
+            }
+
+            const result = groupMemberships.map(membership => {
+                const g = membership.group;
+                return {
+                    id: g.id,
+                    name: g.name,
+                    description: g.description,
+                    iconUrl: g.iconUrl,
+                };
+            });
+
+            this.logger.log(`Successfully retrieved ${result.length} groups for user ID: ${userId}`, context);
+            return mapToDto(GroupResponseDto, result);
+        } catch (error) {
+            this.logger.error(`Failed to get group list for user ${userId}: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to retrieve groups.');
+        }
+    }
 }

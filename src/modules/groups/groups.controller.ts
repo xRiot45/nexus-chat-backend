@@ -2,6 +2,7 @@ import {
     Body,
     Controller,
     Delete,
+    Get,
     HttpCode,
     HttpStatus,
     Param,
@@ -209,6 +210,27 @@ export class GroupsController {
             statusCode: HttpStatus.OK,
             message: 'Member role has been successfully changed',
             timestamp: new Date(),
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get my groups',
+        description: 'Retrieve the list of groups the current user is a member of',
+        auth: true,
+        response: GroupResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get('my-groups')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async getMyGroups(@CurrentUser() user: JwtPayload): Promise<BaseResponseDto<GroupResponseDto[]>> {
+        const result = await this.groupsService.getMyGroups(user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Groups fetched successfully',
+            timestamp: new Date(),
+            data: result,
         };
     }
 }
