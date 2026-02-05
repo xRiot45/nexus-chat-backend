@@ -519,4 +519,49 @@ export class GroupsService {
             throw new InternalServerErrorException('Failed to retrieve group members.');
         }
     }
+
+    /**
+     * Retrieves the profile of a group for a specific user.
+     *
+     * @param {string} groupId - The ID of the group.
+     * @param {string} userId - The ID of the user.
+     * @return {Promise<GroupResponseDto>} - A promise that resolves to the profile of the group.
+     * @throws {ForbiddenException} - If the user is not a member of the group.
+     * @throws {NotFoundException} - If the group with the given ID is not found.
+     * @throws {InternalServerErrorException} - If there was an error retrieving the group profile.
+     */
+    async getProfileGroup(groupId: string, userId: string): Promise<GroupResponseDto> {
+        const context = `${GroupsService.name}.getProfileGroup`;
+        this.logger.log(`User ${userId} fetching profile for group ID: ${groupId}`, context);
+
+        try {
+            const membership = await this.groupMemberRepository.findOne({
+                where: { groupId, userId },
+            });
+
+            if (!membership) {
+                this.logger.warn(`Unauthorized access: User ${userId} is not a member of group ${groupId}`, context);
+                throw new ForbiddenException('You do not have access to this group profile');
+            }
+
+            const group = await this.groupRepository.findOne({
+                where: { id: groupId },
+                relations: ['owner'],
+            });
+
+            if (!group) {
+                this.logger.warn(`Group with ID: ${groupId} not found`, context);
+                throw new NotFoundException(`Group with ID ${groupId} not found`);
+            }
+
+            this.logger.log(`Successfully retrieved profile for group ID: ${groupId}`, context);
+
+            return mapToDto(GroupResponseDto, group);
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+
+            this.logger.error(`Failed to get profile for group ID ${groupId}: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to retrieve group profile.');
+        }
+    }
 }

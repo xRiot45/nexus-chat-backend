@@ -258,4 +258,28 @@ export class GroupsController {
             data: result,
         };
     }
+
+    @ApiDocGenericResponse({
+        summary: 'Get group profile',
+        description: 'Retrieve the profile details of a specified group',
+        auth: true,
+        response: GroupResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get(':groupId')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async getProfileGroup(
+        @Param('groupId') groupId: string,
+        @CurrentUser() user: JwtPayload,
+    ): Promise<BaseResponseDto<GroupResponseDto>> {
+        const result = await this.groupsService.getProfileGroup(groupId, user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Group profile fetched successfully',
+            timestamp: new Date(),
+            data: result,
+        };
+    }
 }
