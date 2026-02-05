@@ -7,6 +7,7 @@ import {
     Param,
     Patch,
     Post,
+    Put,
     UploadedFile,
     UseGuards,
     UseInterceptors,
@@ -15,6 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { GroupRole } from 'src/common/enums/group-role.enum';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { createStorageConfig, fileFilter } from 'src/shared/utils/file-upload.util';
@@ -181,6 +183,31 @@ export class GroupsController {
             success: true,
             statusCode: HttpStatus.OK,
             message: 'Successfully left the group',
+            timestamp: new Date(),
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Change role of a group member',
+        description: 'Change the role of a group member (Requires Owner or Admin role)',
+        auth: true,
+        response: BaseResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Put(':groupId/members/:memberId/role')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async changeRoleMember(
+        @CurrentUser() user: JwtPayload,
+        @Param('groupId') groupId: string,
+        @Param('memberId') memberId: string,
+        @Body('role') role: GroupRole,
+    ): Promise<BaseResponseDto> {
+        await this.groupsService.changeRoleMember(groupId, memberId, user.sub, role);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Member role has been successfully changed',
             timestamp: new Date(),
         };
     }

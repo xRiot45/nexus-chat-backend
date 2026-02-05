@@ -354,4 +354,76 @@ export class GroupsService {
             throw new InternalServerErrorException('Failed to leave group');
         }
     }
+
+    /**
+     * Changes the role of a member in a group.
+     * @param groupId The ID of the group to change the role in.
+     * @param memberId The ID of the member to change the role for.
+     * @param requesterId The ID of the user that is performing the role change.
+     * @param newRole The new role for the member.
+     * @returns A promise that resolves when the role change is successful.
+     * @throws ForbiddenException If the requester does not have permission to change roles in the group.
+     * @throws NotFoundException If the member to be changed is not found in the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the role change process.
+     */
+    // groups.service.ts
+
+    async changeRoleMember(groupId: string, memberId: string, requesterId: string, newRole: GroupRole): Promise<void> {
+        const context = `${GroupsService.name}.changeRoleMember`;
+        this.logger.log(
+            `Attempting to change role for user ${memberId} in group ${groupId}. Requested by: ${requesterId}`,
+            context,
+        );
+
+        try {
+            this.logger.debug(`Verifying permissions for requester: ${requesterId}`, context);
+            const requester = await this.groupMemberRepository.findOne({
+                where: { groupId, userId: requesterId },
+            });
+
+            if (!requester || (requester.role !== GroupRole.OWNER && requester.role !== GroupRole.ADMIN)) {
+                this.logger.warn(
+                    `Permission denied: User ${requesterId} attempted to change role but is not an Owner/Admin`,
+                    context,
+                );
+                throw new ForbiddenException('You do not have permission to change roles in this group');
+            }
+
+            this.logger.debug(`Fetching target member record for user: ${memberId}`, context);
+            const member = await this.groupMemberRepository.findOne({
+                where: { groupId, userId: memberId },
+            });
+
+            if (!member) {
+                this.logger.warn(
+                    `Change role failed: Target user ${memberId} is not a member of group ${groupId}`,
+                    context,
+                );
+                throw new NotFoundException(`Member not found in this group`);
+            }
+
+            if (member.role === GroupRole.OWNER && requester.role === GroupRole.ADMIN) {
+                this.logger.warn(
+                    `Security violation: Admin ${requesterId} tried to modify Owner ${memberId}'s role`,
+                    context,
+                );
+                throw new ForbiddenException('Admins cannot change the role of the Owner');
+            }
+
+            const oldRole = member.role;
+            member.role = newRole;
+
+            this.logger.log(`Updating role in database from ${oldRole} to ${newRole}`, context);
+            await this.groupMemberRepository.save(member);
+
+            this.logger.log(`Successfully updated role for user ${memberId}. New role: ${newRole}`, context);
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            this.logger.error(`Unexpected error during role change: ${(error as Error).message}`, context);
+            throw new InternalServerErrorException('Failed to change member role, please try again later.');
+        }
+    }
 }
