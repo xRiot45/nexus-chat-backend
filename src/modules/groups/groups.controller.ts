@@ -19,6 +19,7 @@ import { ApiDocGenericResponse } from 'src/common/decorators/api-doc.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { UserShortResponseDto } from 'src/shared/dto/user-short-response.dto';
 import type { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { createStorageConfig, fileFilter } from 'src/shared/utils/file-upload.util';
 import { BaseResponseDto } from './../../shared/dto/base-response.dto';
@@ -229,6 +230,30 @@ export class GroupsController {
             success: true,
             statusCode: HttpStatus.OK,
             message: 'Groups fetched successfully',
+            timestamp: new Date(),
+            data: result,
+        };
+    }
+
+    @ApiDocGenericResponse({
+        summary: 'Get group members',
+        description: 'Retrieve the list of members in a specified group',
+        auth: true,
+        response: UserShortResponseDto,
+        status: HttpStatus.OK,
+    })
+    @Get(':groupId/members')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async getGroupMembers(
+        @Param('groupId') groupId: string,
+        @CurrentUser() user: JwtPayload,
+    ): Promise<BaseResponseDto<UserShortResponseDto[]>> {
+        const result = await this.groupsService.getGroupMembers(groupId, user.sub);
+        return {
+            success: true,
+            statusCode: HttpStatus.OK,
+            message: 'Group members fetched successfully',
             timestamp: new Date(),
             data: result,
         };

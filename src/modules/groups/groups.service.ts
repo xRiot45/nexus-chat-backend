@@ -10,6 +10,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
+import { UserShortResponseDto } from 'src/shared/dto/user-short-response.dto';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
 import { mapToDto } from 'src/shared/utils/transformer.util';
 import { In, Repository } from 'typeorm';
@@ -470,6 +471,52 @@ export class GroupsService {
         } catch (error) {
             this.logger.error(`Failed to get group list for user ${userId}: ${(error as Error).message}`, context);
             throw new InternalServerErrorException('Failed to retrieve groups.');
+        }
+    }
+
+    /**
+     * Retrieves the list of group members for a specific group.
+     *
+     * @param {string} groupId - The ID of the group.
+     * @param {string} userId - The ID of the user.
+     * @return {Promise<UserShortResponseDto[]>} - A promise that resolves to an array of UserShortResponseDto objects representing the group members.
+     * @throws {ForbiddenException} - If the user is not a member of the group.
+     * @throws {InternalServerErrorException} - If there was an error retrieving the group members.
+     */
+    async getGroupMembers(groupId: string, userId: string): Promise<UserShortResponseDto[]> {
+        const context = `${GroupsService.name}.getGroupMembers`;
+        this.logger.log(`User ${userId} attempting to fetch members for group: ${groupId}`, context);
+
+        try {
+            const isMember = await this.groupMemberRepository.findOne({
+                where: {
+                    groupId: groupId,
+                    userId: userId,
+                },
+            });
+
+            if (!isMember) {
+                this.logger.warn(`Access denied: User ${userId} is not a member of group ${groupId}`, context);
+                throw new ForbiddenException('You must be a member of this group to see the member list.');
+            }
+
+            const groupMembers = await this.groupMemberRepository.find({
+                where: { groupId },
+                relations: ['user'],
+            });
+
+            const users = groupMembers.map(member => member.user);
+
+            this.logger.log(`Successfully retrieved ${users.length} members for group: ${groupId}`, context);
+            return mapToDto(UserShortResponseDto, users);
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+
+            this.logger.error(
+                `Failed to get group members for group ID ${groupId}: ${(error as Error).message}`,
+                context,
+            );
+            throw new InternalServerErrorException('Failed to retrieve group members.');
         }
     }
 }
