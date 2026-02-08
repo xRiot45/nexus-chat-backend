@@ -266,7 +266,7 @@ export class GroupsController {
         response: GroupResponseDto,
         status: HttpStatus.OK,
     })
-    @Get(':groupId')
+    @Get(':groupId/profile')
     @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.OK)
     async getProfileGroup(
