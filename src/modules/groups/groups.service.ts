@@ -554,7 +554,11 @@ export class GroupsService {
                 throw new NotFoundException(`Group with ID ${groupId} not found`);
             }
 
-            this.logger.log(`Successfully retrieved profile for group ID: ${groupId}`, context);
+            const membersCountInGroup = await this.groupMemberRepository.count({
+                where: { groupId },
+            });
+
+            group['membersCount'] = membersCountInGroup;
 
             return mapToDto(GroupResponseDto, group);
         } catch (error) {

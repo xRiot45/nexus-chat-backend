@@ -19,6 +19,10 @@ export class GroupResponseDto {
     @Expose()
     iconUrl: string;
 
+    @ApiProperty({ example: 42 })
+    @Expose()
+    membersCount: number;
+
     @ApiProperty({ type: () => UserShortResponseDto })
     @Expose()
     @Type(() => UserShortResponseDto)
