@@ -10,13 +10,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { GroupRole } from 'src/common/enums/group-role.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { UserShortResponseDto } from 'src/shared/dto/user-short-response.dto';
 import { deleteFile } from 'src/shared/utils/file-upload.util';
 import { mapToDto } from 'src/shared/utils/transformer.util';
 import { In, Repository } from 'typeorm';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { GroupResponseDto } from './dto/group-response.dto';
 import { InviteMemberDto, InviteMemberResponseDto } from './dto/invite-member.dto';
+import { MemberGroupResponseDto } from './dto/member-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupMemberEntity } from './entities/group-member.entity';
 import { GroupEntity } from './entities/group.entity';
@@ -475,15 +475,16 @@ export class GroupsService {
     }
 
     /**
-     * Retrieves the list of group members for a specific group.
+     * Retrieves the list of members of a group for a given user ID.
+     * The user must be a member of the group to see the member list.
      *
      * @param {string} groupId - The ID of the group.
      * @param {string} userId - The ID of the user.
-     * @return {Promise<UserShortResponseDto[]>} - A promise that resolves to an array of UserShortResponseDto objects representing the group members.
-     * @throws {ForbiddenException} - If the user is not a member of the group.
-     * @throws {InternalServerErrorException} - If there was an error retrieving the group members.
+     * @return {Promise<MemberGroupResponseDto[]>} - A promise that resolves to an array of MemberGroupResponseDto objects representing the members of the group.
+     * @throws ForbiddenException If the user is not a member of the group.
+     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the group members.
      */
-    async getGroupMembers(groupId: string, userId: string): Promise<UserShortResponseDto[]> {
+    async getGroupMembers(groupId: string, userId: string): Promise<MemberGroupResponseDto[]> {
         const context = `${GroupsService.name}.getGroupMembers`;
         this.logger.log(`User ${userId} attempting to fetch members for group: ${groupId}`, context);
 
@@ -505,10 +506,8 @@ export class GroupsService {
                 relations: ['user'],
             });
 
-            const users = groupMembers.map(member => member.user);
-
-            this.logger.log(`Successfully retrieved ${users.length} members for group: ${groupId}`, context);
-            return mapToDto(UserShortResponseDto, users);
+            this.logger.log(`Successfully retrieved ${groupMembers.length} members for group: ${groupId}`, context);
+            return mapToDto(MemberGroupResponseDto, groupMembers);
         } catch (error) {
             if (error instanceof HttpException) throw error;
 
