@@ -1,3 +1,4 @@
+import { MessageEntity } from 'src/modules/chat/entities/message.entity';
 import { UserEntity } from 'src/modules/users/entities/user.entity';
 import { BaseEntity } from 'src/shared/entity/base.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
@@ -34,4 +35,7 @@ export class GroupEntity extends BaseEntity {
 
     @OneToMany(() => GroupMemberEntity, member => member.group)
     members: GroupMemberEntity[];
+
+    @OneToMany(() => MessageEntity, message => message.group)
+    messages: MessageEntity[];
 }
