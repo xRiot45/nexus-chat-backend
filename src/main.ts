@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
 import cookieParser from 'cookie-parser';
+import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { join } from 'path';
@@ -47,6 +48,8 @@ async function bootstrap(): Promise<void> {
     app.useStaticAssets(join(__dirname, '..', 'public'), {
         prefix: '/api/public/',
     });
+    app.use(json({ limit: '5mb' }));
+    app.use(urlencoded({ extended: true, limit: '10mb' }));
 
     if (isDevelopment) {
         const config = new DocumentBuilder()
