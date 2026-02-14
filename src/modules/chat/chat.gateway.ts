@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
 import { InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -8,14 +9,15 @@ import {
     WebSocketGateway,
     WebSocketServer,
 } from '@nestjs/websockets';
-import { plainToInstance } from 'class-transformer';
 import { DefaultEventsMap, Server, Socket } from 'socket.io';
 import { UserStatus } from 'src/common/enums/user-status.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { TokenService } from 'src/core/services/token.service';
 import { JwtPayload } from 'src/shared/interfaces/jwt-payload.interface';
 import { ChatUtils } from 'src/shared/utils/chat.utils';
+import { mapToDto } from 'src/shared/utils/transformer.util';
 import { Repository } from 'typeorm';
+import { GroupsService } from '../groups/groups.service';
 import { UserEntity } from '../users/entities/user.entity';
 import { ChatService } from './chat.service';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -45,6 +47,7 @@ export class ChatGateway implements OnGatewayConnection {
         private readonly chatService: ChatService,
         private readonly logger: LoggerService,
         private readonly tokenService: TokenService,
+        private readonly groupsService: GroupsService,
     ) {}
 
     /**
@@ -72,6 +75,12 @@ export class ChatGateway implements OnGatewayConnection {
             client.data.user = user;
 
             await client.join(ChatUtils.getUserRoom(user?.sub));
+
+            const userGroups = await this.groupsService.getUserGroupIds(user.sub);
+            userGroups.forEach(groupId => {
+                client.join(ChatUtils.getGroupRoom(groupId));
+                this.logger.log(`User ${user.sub} joined group room: ${groupId}`, context);
+            });
 
             await this.userRepository.update(user.sub, {
                 status: UserStatus.ONLINE,
@@ -131,21 +140,25 @@ export class ChatGateway implements OnGatewayConnection {
         @MessageBody() dto: CreateMessageDto,
     ): Promise<MessageResponseDto> {
         const context = `${ChatGateway.name}.handleSendMessage`;
+        const senderId = client.data.user.sub;
+
         this.logger.log(`Event sendMessage received: ${JSON.stringify(dto)}`, context);
 
         try {
-            const senderId = client.data.user.sub;
             const savedMsg = await this.chatService.sendMessage(senderId, dto);
-            const response = plainToInstance(MessageResponseDto, savedMsg, {
-                excludeExtraneousValues: true,
-            });
+            const response = mapToDto(MessageResponseDto, savedMsg);
 
-            this.logger.log(`Message successfully saved. ID: ${response.id}`, context);
+            if (response.groupId) {
+                const groupRoom = ChatUtils.getGroupRoom(response.groupId);
+                this.server.to(groupRoom).emit('message', response);
+                this.logger.log(`Group message sent to room: ${groupRoom}`, context);
+            } else if (response.conversationId && dto.recipientId) {
+                const recipientRoom = ChatUtils.getUserRoom(dto.recipientId);
+                this.server.to(recipientRoom).emit('message', response);
 
-            const recipientRoom = ChatUtils.getUserRoom(dto.recipientId);
-            this.server.to(recipientRoom).emit('message', response);
+                this.logger.log(`1-on-1 message sent to room: ${recipientRoom}`, context);
+            }
 
-            this.logger.log(`Message sent to room: ${recipientRoom}`, context);
             return response;
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -154,6 +167,23 @@ export class ChatGateway implements OnGatewayConnection {
             this.logger.error(`Failed to send message: ${errorMessage}`, errorStack, context);
 
             throw error;
+        }
+    }
+
+    @SubscribeMessage('joinGroup')
+    async handleJoinGroup(
+        @ConnectedSocket() client: AuthenticatedSocket,
+        @MessageBody() data: { groupId: string },
+    ): Promise<void> {
+        const userId = client.data.user.sub;
+        const isMember = await this.groupsService.getGroupMembers(data.groupId, userId);
+
+        if (isMember) {
+            const roomName = ChatUtils.getGroupRoom(data.groupId);
+            await client.join(roomName);
+            this.logger.log(`User ${userId} joined room ${roomName}`, 'handleJoinGroup');
+        } else {
+            client.emit('exception', { status: 'error', message: 'Not a member of this group' });
         }
     }
 

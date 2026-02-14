@@ -567,4 +567,18 @@ export class GroupsService {
             throw new InternalServerErrorException('Failed to retrieve group profile.');
         }
     }
+
+    async getUserGroupIds(userId: string): Promise<string[]> {
+        try {
+            const memberships = await this.groupMemberRepository.find({
+                where: { userId: userId },
+                select: ['groupId'],
+            });
+
+            return memberships.map(member => member.groupId);
+        } catch (error) {
+            this.logger.error(`Failed to fetch user group IDs: ${(error as Error).message}`);
+            return [];
+        }
+    }
 }

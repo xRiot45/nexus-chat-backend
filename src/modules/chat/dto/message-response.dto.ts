@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
-import { UserResponseDto } from 'src/modules/users/dto/user-response.dto';
+import { UserResponseDto } from '../../users/dto/user-response.dto';
 import { MessageEntity } from '../entities/message.entity';
 
 export class MessageResponseDto {
@@ -32,26 +32,38 @@ export class MessageResponseDto {
     @Expose()
     sender: UserResponseDto;
 
+    // --- MODIFIKASI: Conversation ID jadi Nullable ---
     @ApiProperty({
         example: '550e8400-e29b-41d4-a716-446655440000',
-        description: 'The unique identifier of the conversation (UUID)',
+        description: 'The unique identifier of the conversation (UUID). Null if Group Chat.',
+        nullable: true,
     })
     @Expose()
-    conversationId: string;
+    conversationId: string | null;
+
+    // --- MODIFIKASI: Tambah Group ID ---
+    @ApiProperty({
+        example: '550e8400-e29b-41d4-a716-446655440000',
+        description: 'The unique identifier of the group (UUID). Null if 1-on-1 Chat.',
+        nullable: true,
+    })
+    @Expose()
+    groupId: string | null;
 
     @ApiProperty({
         example: false,
-        description: 'True if the message has been read by the recipient',
+        description: 'True if the message has been read (Specific logic for 1-on-1)',
     })
     @Expose()
     isRead: boolean;
 
     @ApiProperty({
         example: '2023-08-31T10:00:00.000Z',
-        description: 'The read date and time of the message',
+        description: 'The read date and time',
+        nullable: true,
     })
     @Expose()
-    readAt: Date;
+    readAt: Date | null;
 
     @ApiProperty({
         example: '2023-08-31T10:00:00.000Z',
@@ -73,9 +85,13 @@ export class MessageResponseDto {
         this.id = message.id ?? '';
         this.content = message.content ?? '';
         this.senderId = message.senderId ?? '';
-        this.conversationId = message.conversationId ?? '';
+
+        // Logic Kondisional: Gunakan null jika tidak ada
+        this.conversationId = message.conversationId ?? null;
+        this.groupId = message.groupId ?? null;
+
         this.isRead = message.isRead ?? false;
-        this.readAt = message.readAt ?? new Date();
+        this.readAt = message.readAt ?? null;
         this.createdAt = message.createdAt ?? new Date();
         this.updatedAt = message.updatedAt ?? new Date();
 

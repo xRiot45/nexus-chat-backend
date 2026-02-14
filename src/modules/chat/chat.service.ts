@@ -1,8 +1,15 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ForbiddenException,
+    Injectable,
+    InternalServerErrorException,
+    NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { Not, Repository } from 'typeorm';
+import { GroupMemberEntity } from '../groups/entities/group-member.entity';
 import { ConversationResponseDto } from './dto/conversation-response.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
@@ -16,6 +23,8 @@ export class ChatService {
         private readonly conversationRepository: Repository<ConversationEntity>,
         @InjectRepository(MessageEntity)
         private readonly messageRepository: Repository<MessageEntity>,
+        @InjectRepository(GroupMemberEntity)
+        private readonly groupMemberRepository: Repository<GroupMemberEntity>,
         private readonly logger: LoggerService,
     ) {}
 
@@ -33,34 +42,80 @@ export class ChatService {
      */
     async sendMessage(senderId: string, dto: CreateMessageDto): Promise<MessageResponseDto> {
         const context = `${ChatService.name}.sendMessage`;
-        const { recipientId, content } = dto;
+        const { recipientId, groupId, content } = dto; // Ambil groupId dari DTO
 
         try {
-            this.logger.log(`Processing message: ${senderId} -> ${recipientId}`, context);
+            this.logger.log(`Processing message from ${senderId}`, context);
 
-            let conversation = await this.conversationRepository.findOne({
-                where: [
-                    { creatorId: senderId, recipientId: recipientId },
-                    { creatorId: recipientId, recipientId: senderId },
-                ],
-            });
+            let savedMessage: MessageEntity;
 
-            if (!conversation) {
-                this.logger.log(`Creating new conversation record`, context);
-                conversation = await this.conversationRepository.save(
-                    this.conversationRepository.create({
-                        creatorId: senderId,
-                        recipientId: recipientId,
-                    }),
-                );
+            // --- SKENARIO 1: GROUP CHAT ---
+            if (groupId) {
+                this.logger.log(`Target: Group ${groupId}`, context);
+
+                // 1. Validasi: Apakah pengirim adalah anggota grup?
+                const isMember = await this.groupMemberRepository.findOne({
+                    where: { groupId, userId: senderId },
+                });
+
+                if (!isMember) {
+                    this.logger.warn(
+                        `User ${senderId} tried to send message to group ${groupId} without membership`,
+                        context,
+                    );
+                    throw new ForbiddenException('You are not a member of this group');
+                }
+
+                // 2. Buat object pesan untuk Group
+                const messageData = this.messageRepository.create({
+                    content,
+                    senderId,
+                    groupId, // Set Group ID
+                    conversationId: null, // Pastikan conversationId null
+                    isRead: false, // Read receipt untuk grup biasanya logic-nya beda, default false
+                });
+
+                savedMessage = await this.messageRepository.save(messageData);
             }
 
-            const messageData = this.messageRepository.create({
-                content,
-                senderId,
-                conversationId: conversation.id,
-            });
-            const savedMessage = await this.messageRepository.save(messageData);
+            // --- SKENARIO 2: 1-ON-1 CHAT ---
+            else if (recipientId) {
+                this.logger.log(`Target: User ${recipientId}`, context);
+
+                // 1. Cari Conversation yang sudah ada
+                let conversation = await this.conversationRepository.findOne({
+                    where: [
+                        { creatorId: senderId, recipientId: recipientId },
+                        { creatorId: recipientId, recipientId: senderId },
+                    ],
+                });
+
+                // 2. Jika tidak ada, buat baru
+                if (!conversation) {
+                    this.logger.log(`Creating new 1-on-1 conversation`, context);
+                    conversation = await this.conversationRepository.save(
+                        this.conversationRepository.create({
+                            creatorId: senderId,
+                            recipientId: recipientId,
+                        }),
+                    );
+                }
+
+                // 3. Buat object pesan untuk Conversation
+                const messageData = this.messageRepository.create({
+                    content,
+                    senderId,
+                    conversationId: conversation.id, // Set Conversation ID
+                    groupId: null, // Pastikan groupId null
+                });
+
+                savedMessage = await this.messageRepository.save(messageData);
+            } else {
+                throw new BadRequestException('Message must have either a groupId or a recipientId');
+            }
+
+            // --- FINAL: RETRIEVE FULL DATA ---
+            // Kita perlu fetch ulang untuk mendapatkan relasi sender (avatar, name, dll)
             const fullMessage = await this.messageRepository.findOne({
                 where: { id: savedMessage.id },
                 relations: ['sender'],
@@ -70,16 +125,24 @@ export class ChatService {
                 throw new NotFoundException(`Message ${savedMessage.id} could not be retrieved`);
             }
 
-            this.logger.log(`Message delivered successfully. ID: ${fullMessage.id}`, context);
+            this.logger.log(`Message delivered. ID: ${fullMessage.id}`, context);
 
             return new MessageResponseDto(fullMessage);
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             const stack = error instanceof Error ? error.stack : '';
 
             this.logger.error(`Failed to send message: ${errorMessage}`, stack, context);
 
-            if (error instanceof NotFoundException) throw error;
+            // Re-throw exception yang sudah kita tangani
+            if (
+                error instanceof ForbiddenException ||
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException
+            ) {
+                throw error;
+            }
+
             throw new InternalServerErrorException('Chat service encountered an error');
         }
     }
