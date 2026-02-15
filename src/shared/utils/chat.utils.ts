@@ -1,9 +1,9 @@
-export const ChatUtils = {
-    getUserRoom: (userId: string | number): string => {
+export class ChatUtils {
+    static getUserRoom(userId: string): string {
         return `user_room_${userId}`;
-    },
+    }
 
-    getGroupRoom: (groupId: string): string => {
-        return `group_room_${groupId}`;
-    },
-};
+    static getGroupRoom(groupId: string): string {
+        return `group_${groupId}`;
+    }
+}

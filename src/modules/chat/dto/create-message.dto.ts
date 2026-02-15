@@ -1,22 +1,24 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateMessageDto {
     @ApiProperty({
-        description: 'ID (UUID) dari user yang akan menerima pesan',
+        description: 'ID (UUID) dari user yang akan menerima pesan. (Opsional jika Group Chat)',
         example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        required: false,
     })
-    @IsNotEmpty({ message: 'Recipient ID tidak boleh kosong' })
+    @IsOptional()
     @IsUUID('4', { message: 'Recipient ID harus format UUID yang valid' })
-    recipientId: string;
+    recipientId?: string;
 
     @ApiProperty({
-        description: 'ID (UUID) dari group yang akan menerima pesan',
+        description: 'ID (UUID) dari group yang akan menerima pesan. (Opsional jika Personal Chat)',
         example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        required: false,
     })
-    @IsNotEmpty({ message: 'Recipient ID tidak boleh kosong' })
-    @IsUUID('4', { message: 'Recipient ID harus format UUID yang valid' })
-    groupId: string;
+    @IsOptional()
+    @IsUUID('4', { message: 'Group ID harus format UUID yang valid' })
+    groupId?: string;
 
     @ApiProperty({
         description: 'Isi pesan teks yang akan dikirim',
