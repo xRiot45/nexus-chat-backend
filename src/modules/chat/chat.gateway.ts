@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -78,7 +77,7 @@ export class ChatGateway implements OnGatewayConnection {
 
             const userGroups = await this.groupsService.getUserGroupIds(user.sub);
             userGroups.forEach(groupId => {
-                client.join(ChatUtils.getGroupRoom(groupId));
+                void client.join(ChatUtils.getGroupRoom(groupId));
                 this.logger.log(`User ${user.sub} joined group room: ${groupId}`, context);
             });
 
@@ -128,11 +127,16 @@ export class ChatGateway implements OnGatewayConnection {
     }
 
     /**
-     * Handles the sendMessage event and sends the message to the recipient's room.
-     * @param client The connected socket.
-     * @param dto The CreateMessageDto containing the message details.
-     * @returns A promise of the MessageResponseDto containing the saved message.
-     * @throws Error If an unexpected error occurs during message processing.
+     * Handles the sendMessage event from a client and sends a message from the sender to the recipient.
+     * If the conversation between the sender and recipient does not exist, a new conversation record is created.
+     * The message is then saved to the database and the full message object is returned.
+     * If the message could not be retrieved after saving, a NotFoundException is thrown.
+     * If any other unexpected error occurs during the sending of the message, an InternalServerErrorException is thrown.
+     * @param client The authenticated socket client.
+     * @param dto The CreateMessageDto containing the recipient ID and message content.
+     * @returns A promise of the MessageResponseDto containing the full message object.
+     * @throws NotFoundException If the message could not be retrieved after saving.
+     * @throws InternalServerErrorException If any other unexpected error occurs during the sending of the message.
      */
     @SubscribeMessage('sendMessage')
     async handleSendMessage(
@@ -170,6 +174,14 @@ export class ChatGateway implements OnGatewayConnection {
         }
     }
 
+    /**
+     * Handles the joinGroup event from a client and adds the user to the group's socket room.
+     * If the user is not a member of the group, an exception event is emitted to the client with a status of 'error' and a message of 'Not a member of this group'.
+     * @param client The authenticated socket client.
+     * @param data The event data containing the group ID.
+     * @returns A promise that resolves when the user is successfully added to the group's socket room.
+     * @throws InternalServerErrorException If an unexpected error occurs during the addition of the user to the group's socket room.
+     */
     @SubscribeMessage('joinGroup')
     async handleJoinGroup(
         @ConnectedSocket() client: AuthenticatedSocket,
