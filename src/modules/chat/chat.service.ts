@@ -15,6 +15,7 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
 import { ConversationEntity } from './entities/conversation.entity';
 import { MessageEntity } from './entities/message.entity';
+import { GetMessageParams } from './interfaces/get-message-params.interface';
 
 @Injectable()
 export class ChatService {
@@ -125,46 +126,80 @@ export class ChatService {
     }
 
     /**
-     * Retrieves a list of messages for a given user and recipient pair.
-     * If the conversation does not exist, an empty array is returned.
-     * The messages are ordered in descending order by their creation time and are paginated.
-     * @param userId The ID of the user to retrieve the messages for.
-     * @param recipientId The ID of the recipient to retrieve the messages for.
-     * @param limit The maximum number of messages to return. Defaults to 20.
-     * @param offset The number of messages to skip before returning the result. Defaults to 0.
-     * @returns A promise of the MessageResponseDto array containing the messages.
-     * @throws InternalServerErrorException If an unexpected error occurs during the retrieval of the messages.
+     * Retrieves a list of messages for a given user ID, recipient ID, and/or group ID.
+     * The list is ordered chronologically with the most recent message first.
+     * The limit parameter specifies the maximum number of messages to retrieve (default: 20).
+     * The offset parameter specifies the number of messages to skip before returning the list (default: 0).
+     * If the recipient ID is provided, the messages will be from a personal conversation with the recipient.
+     * If the group ID is provided, the messages will be from a group conversation.
+     * If neither the recipient ID nor the group ID is provided, a BadRequestException will be thrown.
+     * If the user is not a member of the group, a ForbiddenException will be thrown.
+     * @param {string} userId - The ID of the user whose messages are being retrieved.
+     * @param {string} [recipientId] - The ID of the recipient whose messages are being retrieved.
+     * @param {string} [groupId] - The ID of the group whose messages are being retrieved.
+     * @param {number} [limit=20] - The maximum number of messages to retrieve.
+     * @param {number} [offset=0] - The number of messages to skip before returning the list.
+     * @return {Promise<MessageResponseDto[]>} - A promise that resolves to an array of MessageResponseDto objects representing the list of messages.
+     * @throws {ForbiddenException} - If the user is not a member of the group.
+     * @throws {BadRequestException} - If neither the recipient ID nor the group ID is provided.
+     * @throws {InternalServerErrorException} - If an unexpected error occurs during the retrieval of the messages.
      */
-    async getMessages(
-        userId: string,
-        recipientId: string,
-        limit: number = 20,
-        offset: number = 0,
-    ): Promise<MessageResponseDto[]> {
+    async getMessages(params: GetMessageParams): Promise<MessageResponseDto[]> {
+        const { userId, recipientId, groupId, limit = 20, offset = 0 } = params;
         const context = `${ChatService.name}.getMessages`;
 
         try {
-            const conversation = await this.conversationRepository.findOne({
-                where: [
-                    { creatorId: userId, recipientId: recipientId },
-                    { creatorId: recipientId, recipientId: userId },
-                ],
-            });
+            if (groupId) {
+                const isMember = await this.groupMemberRepository.findOne({
+                    where: { groupId, userId },
+                });
 
-            if (!conversation) return [];
+                if (!isMember) {
+                    this.logger.warn(
+                        `User ${userId} tried to fetch messages for group ${groupId} without membership`,
+                        context,
+                    );
+                    throw new ForbiddenException('You are not a member of this group');
+                }
 
-            const messages = await this.messageRepository.find({
-                where: { conversationId: conversation.id },
-                relations: ['sender'],
-                order: { createdAt: 'DESC' },
-                take: limit,
-                skip: offset,
-            });
+                const messages = await this.messageRepository.find({
+                    where: { groupId },
+                    relations: ['sender'],
+                    order: { createdAt: 'DESC' },
+                    take: limit,
+                    skip: offset,
+                });
 
-            return messages.map(message => new MessageResponseDto(message));
+                return messages.map(message => new MessageResponseDto(message));
+            } else if (recipientId) {
+                const conversation = await this.conversationRepository.findOne({
+                    where: [
+                        { creatorId: userId, recipientId: recipientId },
+                        { creatorId: recipientId, recipientId: userId },
+                    ],
+                });
+
+                if (!conversation) return [];
+                const messages = await this.messageRepository.find({
+                    where: { conversationId: conversation.id },
+                    relations: ['sender'],
+                    order: { createdAt: 'DESC' },
+                    take: limit,
+                    skip: offset,
+                });
+
+                return messages.map(message => new MessageResponseDto(message));
+            } else {
+                throw new BadRequestException('You must provide either recipientId or groupId');
+            }
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             this.logger.error(`Failed to fetch messages: ${errorMessage}`, (error as Error).stack, context);
+
+            if (error instanceof ForbiddenException || error instanceof BadRequestException) {
+                throw error;
+            }
+
             throw new InternalServerErrorException('Could not retrieve chat history');
         }
     }

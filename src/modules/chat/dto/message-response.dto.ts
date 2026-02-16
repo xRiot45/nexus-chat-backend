@@ -27,7 +27,7 @@ export class MessageResponseDto {
 
     @ApiProperty({ nullable: true })
     @Expose()
-    groupId: string | null; // Pastikan ini terekspos
+    groupId: string | null;
 
     @ApiProperty()
     @Expose()

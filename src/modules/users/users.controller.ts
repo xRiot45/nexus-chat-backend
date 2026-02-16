@@ -57,7 +57,7 @@ export class UsersController {
         summary: 'Update user profile',
         description: 'Updates username, full name, bio, and avatar. Supports multipart/form-data.',
         auth: true,
-        isMultipart: true,
+        consumes: 'multipart/form-data',
         body: UpdateProfileDto,
         response: UserResponseDto,
         status: HttpStatus.OK,

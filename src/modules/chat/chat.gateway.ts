@@ -208,13 +208,26 @@ export class ChatGateway implements OnGatewayConnection {
     @SubscribeMessage('getMessages')
     async handleGetMessages(
         @ConnectedSocket() client: AuthenticatedSocket,
-        @MessageBody() data: { recipientId: string; limit?: number; offset?: number },
+        @MessageBody()
+        data: {
+            recipientId?: string;
+            groupId?: string;
+            limit?: number;
+            offset?: number;
+        },
     ): Promise<MessageResponseDto[]> {
         const context = `${ChatGateway.name}.handleGetMessages`;
         this.logger.log(`Event getMessages received: ${JSON.stringify(data)}`, context);
 
         const userId = client.data.user?.sub;
-        return this.chatService.getMessages(userId, data.recipientId, data.limit, data.offset);
+
+        return this.chatService.getMessages({
+            userId: userId,
+            recipientId: data.recipientId,
+            groupId: data.groupId,
+            limit: data.limit,
+            offset: data.offset,
+        });
     }
 
     /**

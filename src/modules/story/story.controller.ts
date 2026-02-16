@@ -33,7 +33,7 @@ export class StoryController {
         summary: 'Create a new story',
         description: 'Upload 1 image and 1 video along with a caption. Stories expire in 24 hours.',
         auth: true,
-        isMultipart: true,
+        consumes: 'multipart/form-data',
         body: CreateStoryDto,
         response: StoryResponseDto,
         status: HttpStatus.CREATED,

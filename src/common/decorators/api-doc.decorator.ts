@@ -1,78 +1,154 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 import { applyDecorators, HttpStatus, Type } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiResponseOptions } from '@nestjs/swagger';
+import {
+    ApiBearerAuth,
+    ApiBody,
+    ApiConsumes,
+    ApiHeader,
+    ApiHeaderOptions,
+    ApiOperation,
+    ApiParam,
+    ApiParamOptions,
+    ApiProduces,
+    ApiQuery,
+    ApiQueryOptions,
+    ApiResponse,
+    ApiResponseOptions,
+} from '@nestjs/swagger';
 
-interface ApiDocOptions {
-    summary: string;
-    description?: string;
-    body?: Type<unknown>;
-    response?: Type<unknown>;
-    status?: HttpStatus;
-    auth?: boolean;
-    isMultipart?: boolean;
-    extraResponses?: ApiResponseOptions[];
+export interface ApiDocErrorResponse {
+    status: HttpStatus;
+    description: string;
 }
 
-export function ApiDocGenericResponse(
-    options: ApiDocOptions,
-): <TFunction extends Function, Y>(
-    target: object | TFunction,
-    propertyKey?: string | symbol,
-    descriptor?: TypedPropertyDescriptor<Y>,
-) => void {
+export interface ApiDocOptions {
+    // Basic Info
+    summary: string;
+    description?: string;
+    deprecated?: boolean;
+
+    // Authentication & Security
+    auth?: boolean;
+
+    // Request Configuration
+    body?: Type<unknown>; // DTO Class untuk Body
+    params?: ApiParamOptions[]; // Path Parameters (misal: /:id)
+    queries?: ApiQueryOptions[]; // Query Parameters (misal: ?limit=10)
+    headers?: ApiHeaderOptions[]; // Custom Headers
+
+    // Content Type Configuration
+    consumes?: 'application/json' | 'multipart/form-data' | 'application/x-www-form-urlencoded' | string;
+    produces?: 'application/json' | 'text/csv' | 'application/pdf' | string;
+
+    // Success Response Configuration
+    response?: Type<unknown> | Function | [Function] | string; // Return DTO
+    isArray?: boolean; // Set true jika returnnya adalah Array []
+    status?: HttpStatus; // Default 200 (OK) atau 201 (Created)
+
+    // Error Handling
+    // Opsional: Jika ingin override error message default atau nambah error status lain (misal 404)
+    customResponses?: ApiResponseOptions[];
+}
+
+export function ApiDocGenericResponse(options: ApiDocOptions): MethodDecorator {
     const {
         summary,
         description,
-        body,
-        response,
-        status = HttpStatus.OK,
+        deprecated = false,
         auth = false,
-        isMultipart = false,
-        extraResponses = [],
+        body,
+        params,
+        queries,
+        headers,
+        consumes,
+        produces,
+        response,
+        isArray = false,
+        status = HttpStatus.OK,
+        customResponses = [],
     } = options;
 
-    const decorators: Array<ClassDecorator | MethodDecorator | PropertyDecorator> = [
-        ApiOperation({ summary, description }),
+    const decorators: Array<ClassDecorator | MethodDecorator | PropertyDecorator> = [];
 
-        ApiResponse({
-            status: status,
-            description: 'Operation successful',
-            type: response,
-        }),
+    // 1. Operation Metadata
+    decorators.push(ApiOperation({ summary, description, deprecated }));
 
-        ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Validation failed or malformed request' }),
-        ApiResponse({ status: HttpStatus.TOO_MANY_REQUESTS, description: 'Rate limit exceeded' }),
-        ApiResponse({ status: HttpStatus.INTERNAL_SERVER_ERROR, description: 'Internal server error' }),
-    ];
-
-    // Handle Authentication
+    // 2. Authentication Logic
     if (auth) {
+        decorators.push(ApiBearerAuth());
         decorators.push(
-            ApiBearerAuth(),
             ApiResponse({
                 status: HttpStatus.UNAUTHORIZED,
-                description: 'Unauthorized: Access token is missing or invalid',
+                description: 'Unauthorized: Access token is missing or invalid.',
             }),
             ApiResponse({
                 status: HttpStatus.FORBIDDEN,
-                description: 'Forbidden: You do not have permission to access this resource',
+                description: 'Forbidden: You do not have permission to access this resource.',
             }),
         );
     }
 
-    // Handle Multipart / File Upload
-    if (isMultipart) {
-        decorators.push(ApiConsumes('multipart/form-data'));
+    // 3. Request Parameters (Path, Query, Headers)
+    if (params?.length) {
+        params.forEach(param => decorators.push(ApiParam(param)));
+    }
+    if (queries?.length) {
+        queries.forEach(query => decorators.push(ApiQuery(query)));
+    }
+    if (headers?.length) {
+        headers.forEach(header => decorators.push(ApiHeader(header)));
     }
 
-    // Handle Request Body
+    // 4. Content Type (Consumes & Produces)
+    if (consumes) {
+        decorators.push(ApiConsumes(consumes));
+    }
+    if (produces) {
+        decorators.push(ApiProduces(produces));
+    }
+
+    // 5. Request Body
     if (body) {
         decorators.push(ApiBody({ type: body }));
     }
 
-    // Handle Extra Responses
-    if (extraResponses.length > 0) {
-        extraResponses.forEach(res => decorators.push(ApiResponse(res)));
+    // 6. Success Response
+    if (response) {
+        decorators.push(
+            ApiResponse({
+                status: status,
+                description: 'Operation successful',
+                type: response as Type<unknown>,
+                isArray: isArray,
+            }),
+        );
+    } else {
+        decorators.push(
+            ApiResponse({
+                status: status,
+                description: 'Operation successful',
+            }),
+        );
+    }
+
+    // 7. Standard Error Responses (Default)
+    const defaultErrors = [
+        { status: HttpStatus.BAD_REQUEST, description: 'Validation failed or malformed request.' },
+        { status: HttpStatus.TOO_MANY_REQUESTS, description: 'Rate limit exceeded.' },
+        { status: HttpStatus.INTERNAL_SERVER_ERROR, description: 'Internal server error.' },
+    ];
+
+    defaultErrors.forEach(err => {
+        const isOverridden = customResponses.some(res => res.status === err.status);
+        if (!isOverridden) {
+            decorators.push(ApiResponse(err));
+        }
+    });
+
+    // 8. Custom / Extra Responses
+    if (customResponses.length > 0) {
+        customResponses.forEach(res => decorators.push(ApiResponse(res)));
     }
 
     return applyDecorators(...decorators);
