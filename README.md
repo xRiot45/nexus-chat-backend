@@ -1,4 +1,6 @@
-# Nexus Chat Backend
+![image alt](https://github.com/xRiot45/nexus-chat-backend/blob/1973304b9e5d6c79a5abdf6496ac7801fc9dcf40/thumbnail.png)
+
+# Nexus Chat Backend Documentation
 
 A production-oriented **NestJS backend** for real-time chat applications with authentication, contacts, groups, stories, file uploads, and WebSocket-based messaging.
 
